@@ -1,0 +1,52 @@
+/* =========================================
+   REGLAS GLOBALES DE IMPRESIÓN (REMITOS)
+   ========================================= */
+@media print {
+  /* 1. Apagamos el menú lateral y el layout que nos robaba 220px de espacio invisible */
+  app-root > div {
+    display: block !important;
+    margin: 0 !important;
+  }
+  nav {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+
+  /* 2. Ocultamos el resto de la interfaz (botones, inputs, etc.) */
+  body * {
+    visibility: hidden;
+  }
+  #zona-impresion,
+  #zona-impresion * {
+    visibility: visible;
+  }
+
+  /* 3. Forzamos la zona de impresión a usar el 100% real de la hoja */
+  #zona-impresion {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* 4. Ajuste fino de la tabla para que no se corte la última columna */
+  #zona-impresion table {
+    table-layout: fixed; /* Fuerza a la tabla a no estirarse más allá de la hoja */
+    width: 100% !important;
+    font-size: 13px !important; /* Achicamos un pelín la letra */
+  }
+  #zona-impresion th,
+  #zona-impresion td {
+    padding: 6px 4px !important; /* Le sacamos relleno lateral a las celdas */
+    word-wrap: break-word;
+  }
+
+  /* 5. Le damos un margen estándar de impresora a la hoja A4 */
+  @page {
+    size: A4 portrait;
+    margin: 1cm;
+  }
+}

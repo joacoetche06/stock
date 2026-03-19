@@ -1,0 +1,177 @@
+<div>
+  <h2>Gestión de Inventario</h2>
+
+  <div
+    [style.background]="editandoId() ? '#fff3cd' : '#e9ecef'"
+    style="
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      max-width: 900px;
+      border: 1px solid #ccc;
+    "
+  >
+    <h3 style="margin-top: 0">
+      {{ editandoId() ? '✏️ Editando Producto' : 'Ingresar Nuevo Producto' }}
+    </h3>
+
+    <div
+      style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px"
+    >
+      <input
+        type="text"
+        placeholder="Cód. (Ej: PU01)"
+        [(ngModel)]="nuevoProducto.codigo"
+        style="padding: 8px; width: 120px"
+      />
+
+      <select [(ngModel)]="nuevoProducto.categoria" style="padding: 8px; width: 150px">
+        <option value="">-- Categoría --</option>
+        <option value="Pulseras">Pulseras</option>
+        <option value="Collares">Collares/Cadenas/Dijes</option>
+        <option value="Aros">Aros</option>
+        <option value="Anillos">Anillos</option>
+      </select>
+
+      <select [(ngModel)]="nuevoProducto.material" style="padding: 8px; width: 150px">
+        <option value="">-- Material --</option>
+        <option value="Acero">Acero</option>
+        <option value="Plata">Plata</option>
+        <option value="Cristal">Cristal</option>
+        <option value="Otro">Otro</option>
+      </select>
+
+      <input
+        type="text"
+        placeholder="Descripción de la joya"
+        [(ngModel)]="nuevoProducto.nombre"
+        style="padding: 8px; flex-grow: 1; min-width: 200px"
+      />
+    </div>
+
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center">
+      <!-- Le agregamos el texto fijo al lado del input -->
+      <div style="display: flex; align-items: center; gap: 5px">
+        <span style="font-weight: bold; color: #495057">Precio $:</span>
+        <input
+          type="number"
+          [(ngModel)]="nuevoProducto.precio"
+          style="padding: 8px; width: 100px"
+        />
+      </div>
+
+      <!-- Lo mismo para el stock -->
+      <div *ngIf="!editandoId()" style="display: flex; align-items: center; gap: 5px">
+        <span style="font-weight: bold; color: #495057">Stock inicial:</span>
+        <input
+          type="number"
+          [(ngModel)]="nuevoProducto.stock_real"
+          style="padding: 8px; width: 80px"
+        />
+      </div>
+
+      <button
+        (click)="guardarProducto()"
+        [style.background]="editandoId() ? '#ffc107' : '#28a745'"
+        style="
+          padding: 9px 15px;
+          color: black;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-weight: bold;
+        "
+      >
+        {{ editandoId() ? '💾 Actualizar' : '+ Guardar' }}
+      </button>
+
+      <button
+        *ngIf="editandoId()"
+        (click)="limpiarFormulario()"
+        style="
+          padding: 9px 15px;
+          background: #6c757d;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        "
+      >
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  <table
+    border="1"
+    cellpadding="10"
+    style="
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 900px;
+      text-align: left;
+      background: white;
+    "
+  >
+    <thead style="background-color: #343a40; color: white">
+      <tr>
+        <th>Código</th>
+        <th>Categoría</th>
+        <th>Material</th>
+        <th>Nombre</th>
+        <th>Precio</th>
+        <th>Stock Disp.</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let prod of productos()">
+        <td>
+          <strong>{{ prod.codigo }}</strong>
+        </td>
+        <td>{{ prod.categoria }}</td>
+        <td>{{ prod.material }}</td>
+        <td>{{ prod.nombre }}</td>
+        <td>$ {{ prod.precio }}</td>
+        <td style="color: #28a745; text-align: center">
+          <strong>{{ prod.stock_disponible }}</strong>
+        </td>
+        <td>
+          <button
+            (click)="editar(prod)"
+            style="
+              background: #ffc107;
+              border: none;
+              padding: 5px 10px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-weight: bold;
+            "
+          >
+            Editar
+          </button>
+          <button
+            (click)="eliminar(prod.id!)"
+            style="
+              background: #dc3545;
+              color: white;
+              border: none;
+              padding: 5px 10px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-weight: bold;
+              margin-left: 5px;
+            "
+          >
+            Eliminar
+          </button>
+        </td>
+      </tr>
+      <tr *ngIf="productos().length === 0">
+        <td colspan="7" style="text-align: center; padding: 20px">
+          No hay productos cargados en la base.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

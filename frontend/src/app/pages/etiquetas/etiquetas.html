@@ -1,0 +1,108 @@
+<div>
+  <h2>Impresión de Etiquetas</h2>
+  <p>Indicá cuántas etiquetas necesitás de cada joya y presioná imprimir.</p>
+
+  <div style="margin-bottom: 20px">
+    <button
+      (click)="prepararImpresion()"
+      style="
+        padding: 12px 20px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 16px;
+      "
+    >
+      🖨️ Generar e Imprimir Etiquetas
+    </button>
+  </div>
+
+  <table
+    border="1"
+    cellpadding="8"
+    style="
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 900px;
+      text-align: left;
+      background: white;
+    "
+  >
+    <thead style="background-color: #343a40; color: white">
+      <tr>
+        <th>Código</th>
+        <th>Nombre</th>
+        <th>Precio</th>
+        <th>Stock Disp.</th>
+        <th style="width: 120px; text-align: center">Cant. Etiquetas</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let prod of productos()">
+        <td>
+          <strong>{{ prod.codigo }}</strong>
+        </td>
+        <td>{{ prod.nombre }}</td>
+        <td>$ {{ prod.precio }}</td>
+        <td>{{ prod.stock_disponible }}</td>
+        <td style="text-align: center; background: #e9ecef">
+          <input
+            type="number"
+            min="0"
+            [(ngModel)]="prod.cantidad_etiquetas"
+            style="width: 60px; padding: 5px; text-align: center"
+          />
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ZONA DE IMPRESIÓN OCULTA (Se activa con el window.print()) -->
+  <div id="zona-impresion" *ngIf="etiquetasAImprimir().length > 0">
+    <div
+      style="
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 15px;
+        font-family: Arial, sans-serif;
+      "
+    >
+      <!-- Cada cuadradito es una etiqueta con la instrucción de no cortarse al final de la hoja -->
+      <div
+        *ngFor="let etiq of etiquetasAImprimir()"
+        style="
+          width: 4.5cm;
+          height: 2.5cm;
+          border: 1px dashed #999;
+          padding: 5px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          box-sizing: border-box;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        "
+      >
+        <strong style="font-size: 14px">{{ etiq.codigo }}</strong>
+        <span
+          style="
+            font-size: 11px;
+            margin: 3px 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 100%;
+          "
+          >{{ etiq.nombre }}</span
+        >
+        <strong style="font-size: 16px">$ {{ etiq.precio }}</strong>
+      </div>
+    </div>
+  </div>
+</div>
