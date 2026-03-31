@@ -4,9 +4,10 @@ import { Observable } from 'rxjs';
 
 export interface Producto {
   id?: number;
-  codigo: string;
-  categoria?: string; // <-- NUEVO
-  material?: string; // <-- NUEVO
+  codigo?: string; // Le ponemos el '?' porque ahora el código no es obligatorio al enviarlo
+  categoria?: string;
+  material?: string;
+  medida?: string; // <-- NUEVO
   nombre: string;
   precio: number;
   stock_real: number;
@@ -35,5 +36,9 @@ export class ProductoService {
 
   eliminarProducto(id: number): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${id}`);
+  }
+
+  aumentoMasivo(ids: number[], porcentaje: number): Observable<any> {
+    return this.http.put(`${this.apiUrl}/aumento-masivo`, { ids, porcentaje });
   }
 }

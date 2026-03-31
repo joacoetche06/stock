@@ -18,12 +18,16 @@ export class App {
 
   // Creamos un objeto vacío para atar al formulario
   nuevoProducto: Producto = {
-    codigo: '',
+    categoria: '',
+    material: '',
+    medida: '', // <-- NUEVO
     nombre: '',
     precio: 0,
     stock_real: 0,
     stock_disponible: 0,
   };
+
+  // (Asegurate de hacer lo mismo dentro de tu función limpiarFormulario())
 
   constructor(private productoService: ProductoService) {
     afterNextRender(() => {

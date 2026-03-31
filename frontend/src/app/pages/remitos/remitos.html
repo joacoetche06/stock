@@ -28,39 +28,97 @@
 
     <div style="margin-bottom: 15px">
       <label style="font-weight: bold; display: block; margin-bottom: 5px"
-        >2. Agregar Joyas al Remito:</label
+        >2. Buscar y Agregar Joyas:</label
       >
-      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
-        <select
-          [ngModel]="productoSeleccionado()"
-          (ngModelChange)="productoSeleccionado.set($event)"
-          style="padding: 8px; flex-grow: 1"
-        >
-          <option value="">-- Elegir producto --</option>
-          <option *ngFor="let p of productos()" [value]="p.id">
-            {{ p.codigo }} - {{ p.nombre }} (Disp: {{ p.stock_disponible }})
-          </option>
-        </select>
 
+      <div style="display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap">
+        <div style="position: relative; flex-grow: 1; min-width: 280px">
+          <input
+            type="text"
+            placeholder="🔍 Buscar joya (código, nombre, material)..."
+            [ngModel]="terminoBusqueda()"
+            (ngModelChange)="buscarJoya($event)"
+            (focus)="mostrarDropdown.set(true)"
+            (blur)="ocultarDropdown()"
+            style="
+              padding: 10px;
+              width: 100%;
+              box-sizing: border-box;
+              border: 1px solid #ced4da;
+              border-radius: 4px;
+              font-size: 14px;
+            "
+            autocomplete="off"
+          />
+
+          <div
+            *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
+            style="
+              position: absolute;
+              top: 100%;
+              left: 0;
+              right: 0;
+              background: white;
+              border: 1px solid #ccc;
+              z-index: 1000;
+              max-height: 250px;
+              overflow-y: auto;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              border-radius: 0 0 4px 4px;
+            "
+          >
+            <div
+              *ngFor="let p of productosDisponibles()"
+              (mousedown)="seleccionarProducto(p)"
+              style="
+                padding: 10px;
+                cursor: pointer;
+                border-bottom: 1px solid #eee;
+                transition: background 0.2s;
+              "
+              onmouseover="this.style.backgroundColor = '#f1f3f5'"
+              onmouseout="this.style.backgroundColor = 'white'"
+            >
+              <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
+              <span *ngIf="p.material" style="color: #6c757d; font-size: 0.9em; font-style: italic">
+                ({{ p.material }})
+                <span *ngIf="p.medida" style="font-weight: bold; color: #007bff; font-size: 0.9em">
+                  ({{ p.medida }})
+                </span>
+              </span>
+
+              <span style="color: #28a745; font-size: 0.85em; float: right; font-weight: bold"
+                >Disp: {{ p.stock_disponible }}</span
+              >
+            </div>
+          </div>
+        </div>
         <input
           type="number"
           min="1"
           [ngModel]="cantidadSeleccionada()"
           (ngModelChange)="cantidadSeleccionada.set($event)"
-          style="padding: 8px; width: 80px"
+          style="
+            padding: 10px;
+            width: 80px;
+            box-sizing: border-box;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+          "
           placeholder="Cant"
         />
 
         <button
           (click)="agregarAlRemito()"
           style="
-            padding: 9px 15px;
+            padding: 10px 15px;
             background: #17a2b8;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
+            height: 100%;
           "
         >
           Añadir a lista ↓
@@ -78,15 +136,43 @@
         margin-bottom: 15px;
       "
     >
-      <h4 style="margin-top: 0">Detalle de entrega:</h4>
-      <ul style="padding-left: 20px">
-        <li *ngFor="let item of itemsCarrito(); let i = index" style="margin-bottom: 5px">
-          {{ item.cantidad }}x {{ item.nombre }}
+      <h4 style="margin-top: 0; color: #333">Detalle de entrega:</h4>
+      <ul style="padding-left: 0; list-style: none">
+        <li
+          *ngFor="let item of itemsCarrito(); let i = index"
+          style="
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+          "
+        >
+          <input
+            type="number"
+            [(ngModel)]="item.cantidad"
+            min="1"
+            [max]="item.stock_maximo"
+            style="width: 60px; padding: 5px; font-weight: bold; text-align: center"
+          />
+
+          <span style="flex-grow: 1">
+            <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
+            <span style="font-size: 0.85em; color: #6c757d">(Máx: {{ item.stock_maximo }})</span>
+          </span>
+
           <button
             (click)="quitarDelRemito(i)"
-            style="margin-left: 10px; color: red; border: none; background: none; cursor: pointer"
+            style="
+              color: #dc3545;
+              border: none;
+              background: none;
+              cursor: pointer;
+              font-weight: bold;
+            "
           >
-            [Quitar]
+            [X] Quitar
           </button>
         </li>
       </ul>
@@ -108,6 +194,30 @@
     >
       💾 CONFIRMAR Y GUARDAR REMITO
     </button>
+  </div>
+
+  <div
+    style="
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #e9ecef;
+      padding: 10px 15px;
+      border-radius: 5px;
+      max-width: 800px;
+      box-sizing: border-box;
+    "
+  >
+    <strong style="color: #495057">🔍 Filtrar historial:</strong>
+    <select
+      [ngModel]="filtroVendedor()"
+      (ngModelChange)="filtroVendedor.set($event)"
+      style="padding: 8px; min-width: 200px; border: 1px solid #ced4da; border-radius: 4px"
+    >
+      <option value="">Todas las vendedoras</option>
+      <option *ngFor="let v of vendedores()" [value]="v.nombre">{{ v.nombre }}</option>
+    </select>
   </div>
 
   <h3>Historial de Remitos Emitidos</h3>
@@ -132,7 +242,7 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let r of remitosHistorial()">
+      <tr *ngFor="let r of remitosFiltrados()">
         <td># {{ r.id }}</td>
         <td>{{ r.fecha_salida }}</td>
         <td>
@@ -178,7 +288,7 @@
           </button>
         </td>
       </tr>
-      <tr *ngIf="remitosHistorial().length === 0">
+      <tr *ngIf="remitosFiltrados().length === 0">
         <td colspan="5" style="text-align: center; padding: 20px">Aún no se generaron remitos.</td>
       </tr>
     </tbody>

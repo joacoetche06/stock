@@ -29,12 +29,13 @@ async function inicializarDB() {
             CREATE TABLE IF NOT EXISTS Productos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 codigo TEXT UNIQUE,
-                categoria TEXT,  -- Ej: Pulseras, Collares, Anillos
-                material TEXT,   -- Ej: Acero, Plata, Cristal
-                nombre TEXT NOT NULL,
-                precio REAL DEFAULT 0,
-                stock_real INTEGER DEFAULT 0,
-                stock_disponible INTEGER DEFAULT 0
+                categoria TEXT,
+                material TEXT,
+                medida TEXT,
+                nombre TEXT,
+                precio REAL,
+                stock_real INTEGER,
+                stock_disponible INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS Vendedores (
@@ -63,6 +64,13 @@ async function inicializarDB() {
             );
         `);
 
+    try {
+      await db.exec(`ALTER TABLE Productos ADD COLUMN medida TEXT;`);
+      console.log("Columna 'medida' agregada a la base de datos.");
+    } catch (e) {
+      // Si la columna ya existe, SQLite tira un error inofensivo y cae acá silenciosamente
+    }
+
     console.log("📦 Tablas sincronizadas correctamente.");
   } catch (error) {
     console.error("❌ Error al conectar con la base de datos:", error);
@@ -89,61 +97,155 @@ app.get("/api/productos", async (req, res) => {
   }
 });
 
-// 2. Crear un nuevo producto
+// Crear un nuevo producto (con autogeneración de código)
 app.post("/api/productos", async (req, res) => {
-  const {
-    codigo,
-    categoria,
-    material,
-    nombre,
-    precio,
-    stock_real,
-    stock_disponible,
-  } = req.body;
+  // Extraemos los datos y le ponemos valores por defecto por si alguno llega vacío
+  const categoria = req.body.categoria || "";
+  const material = req.body.material || "";
+  const medida = req.body.medida || "";
+  const nombre = req.body.nombre || "";
+  const precio = req.body.precio || 0;
+  const stock_real = req.body.stock_real || 0;
+  // Al crear, el disponible siempre es igual al real
+  const stock_disponible = req.body.stock_real || 0;
+
+  // 1. Definir el prefijo según la categoría
+  let prefijo = "OT"; // Por defecto: Otro
+  if (categoria === "Cadenas") prefijo = "CA";
+  else if (categoria === "Collares") prefijo = "CO";
+  else if (categoria === "Dijes") prefijo = "DI";
+  else if (categoria === "Pulseras") prefijo = "PU";
+  else if (categoria === "Aros") prefijo = "AR";
+  else if (categoria === "Anillos") prefijo = "AN";
 
   try {
+    // 2. Buscar en la base de datos el último código que empiece con ese prefijo
+    // Usamos SUBSTR para sacar las letras y ordenar numéricamente lo que queda
+    const row = await db.get(
+      `SELECT codigo FROM Productos WHERE codigo LIKE ? ORDER BY CAST(SUBSTR(codigo, 3) AS INTEGER) DESC LIMIT 1`,
+      [`${prefijo}%`],
+    );
+
+    let nuevoNumero = 1;
+    if (row && row.codigo) {
+      const numeroAnterior = parseInt(row.codigo.substring(2));
+      if (!isNaN(numeroAnterior)) {
+        nuevoNumero = numeroAnterior + 1;
+      }
+    }
+
+    // 3. Formatear el número para que tenga siempre al menos 2 dígitos (ej: 01, 02... 15)
+    const numeroFormateado = nuevoNumero.toString().padStart(2, "0");
+    const codigoGenerado = `${prefijo}${numeroFormateado}`;
+
+    // 4. Guardar en la base de datos
     const result = await db.run(
-      `INSERT INTO Productos (codigo, categoria, material, nombre, precio, stock_real, stock_disponible) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO Productos (codigo, categoria, material, medida, nombre, precio, stock_real, stock_disponible) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        codigo,
-        categoria || "",
-        material || "",
+        codigoGenerado,
+        categoria,
+        material,
+        medida,
         nombre,
-        precio || 0,
-        stock_real || 0,
-        stock_disponible || 0,
+        precio,
+        stock_real,
+        stock_disponible,
       ],
     );
 
-    res
-      .status(201)
-      .json({ mensaje: "Producto creado exitosamente", id: result.lastID });
-  } catch (error: any) {
+    res.json({
+      id: result.lastID,
+      codigo: codigoGenerado,
+      mensaje: "Producto creado",
+    });
+  } catch (error) {
     console.error(error);
-    if (error.code === "SQLITE_CONSTRAINT") {
-      res.status(400).json({ error: "Ya existe un producto con ese código." });
-    } else {
-      res.status(500).json({ error: "Error interno al crear el producto" });
-    }
+    res.status(500).json({ error: "Error al crear el producto" });
   }
 });
 
-// 3. Modificar un producto existente (Ej: Editar Precio)
+// 3. Aumento masivo de precios por porcentaje
+app.put("/api/productos/aumento-masivo", async (req, res) => {
+  const { ids, porcentaje } = req.body;
+
+  if (!ids || ids.length === 0 || !porcentaje) {
+    return res
+      .status(400)
+      .json({ error: "Faltan datos para el aumento masivo" });
+  }
+
+  try {
+    // Calculamos el multiplicador (Ej: 5% de aumento = multiplicar por 1.05)
+    const multiplicador = 1 + porcentaje / 100;
+
+    // Creamos los signitos de interrogación para la consulta SQL (uno por cada ID)
+    const placeholders = ids.map(() => "?").join(",");
+
+    // Hacemos el UPDATE multiplicando el precio actual. Usamos ROUND para no tener decimales infinitos.
+    await db.run(
+      `UPDATE Productos SET precio = ROUND(precio * ?, 2) WHERE id IN (${placeholders})`,
+      [multiplicador, ...ids],
+    );
+
+    res.json({ mensaje: "Precios actualizados correctamente" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al aplicar el aumento masivo" });
+  }
+});
+
+// 4. Modificar un producto existente (Ahora con actualización de Stock Inteligente)
 app.put("/api/productos/:id", async (req, res) => {
-  const { codigo, categoria, material, nombre, precio } = req.body;
+  const { codigo, categoria, material, medida, nombre, precio, stock_real } =
+    req.body;
   const productoId = req.params.id;
 
   try {
-    // Nota: No actualizamos el stock acá para no romper la contabilidad. El stock se mueve con los remitos.
-    await db.run(
-      `UPDATE Productos 
-             SET codigo = ?, categoria = ?, material = ?, nombre = ?, precio = ? 
-             WHERE id = ?`,
-      [codigo, categoria, material, nombre, precio, productoId],
+    // 1. Buscamos cómo estaban los stocks ANTES de la edición
+    const productoViejo = await db.get(
+      `SELECT stock_real, stock_disponible FROM Productos WHERE id = ?`,
+      [productoId],
     );
 
-    res.json({ mensaje: "Producto actualizado correctamente" });
+    if (!productoViejo) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    // 2. Calculamos la diferencia (si agregó mercadería da positivo, si quitó da negativo)
+    const diferenciaStock = stock_real - productoViejo.stock_real;
+
+    // 3. Le aplicamos esa misma diferencia al stock disponible
+    const nuevoStockDisponible =
+      productoViejo.stock_disponible + diferenciaStock;
+
+    // Validación de seguridad: no puede quitar más stock del que tiene disponible
+    if (nuevoStockDisponible < 0) {
+      return res.status(400).json({
+        error:
+          "No podés reducir tanto el stock. Hay joyas de este modelo que actualmente están en remitos de vendedoras.",
+      });
+    }
+
+    // 4. Guardamos todo junto
+    await db.run(
+      `UPDATE Productos 
+             SET codigo = ?, categoria = ?, material = ?, medida = ?, nombre = ?, precio = ?, stock_real = ?, stock_disponible = ?
+             WHERE id = ?`,
+      [
+        codigo,
+        categoria,
+        material,
+        medida,
+        nombre,
+        precio,
+        stock_real,
+        nuevoStockDisponible,
+        productoId,
+      ],
+    );
+
+    res.json({ mensaje: "Producto y stock actualizados correctamente" });
   } catch (error: any) {
     console.error(error);
     if (error.code === "SQLITE_CONSTRAINT") {
@@ -364,11 +466,9 @@ app.delete("/api/productos/:id", async (req, res) => {
     res.json({ mensaje: "Producto eliminado correctamente" });
   } catch (error: any) {
     console.error(error);
-    res
-      .status(500)
-      .json({
-        error: "No se puede eliminar. Probablemente ya esté en un remito.",
-      });
+    res.status(500).json({
+      error: "No se puede eliminar. Probablemente ya esté en un remito.",
+    });
   }
 });
 

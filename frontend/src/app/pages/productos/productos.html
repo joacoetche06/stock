@@ -18,19 +18,31 @@
     <div
       style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px"
     >
-      <input
-        type="text"
-        placeholder="Cód. (Ej: PU01)"
-        [(ngModel)]="nuevoProducto.codigo"
-        style="padding: 8px; width: 120px"
-      />
-
-      <select [(ngModel)]="nuevoProducto.categoria" style="padding: 8px; width: 150px">
+      <select
+        [(ngModel)]="nuevoProducto.categoria"
+        (change)="nuevoProducto.medida = ''"
+        style="padding: 8px; width: 150px"
+      >
         <option value="">-- Categoría --</option>
+        <option value="Collares">Collares</option>
+        <option value="Cadenas">Cadenas</option>
+        <option value="Dijes">Dijes</option>
         <option value="Pulseras">Pulseras</option>
-        <option value="Collares">Collares/Cadenas/Dijes</option>
         <option value="Aros">Aros</option>
         <option value="Anillos">Anillos</option>
+      </select>
+
+      <select
+        *ngIf="nuevoProducto.categoria === 'Cadenas'"
+        [(ngModel)]="nuevoProducto.medida"
+        style="padding: 8px; width: 120px; background-color: #e3f2fd"
+      >
+        <option value="">-- Medida --</option>
+        <option value="40 cm">40 cm</option>
+        <option value="45 cm">45 cm</option>
+        <option value="50 cm">50 cm</option>
+        <option value="55 cm">55 cm</option>
+        <option value="60 cm">60 cm</option>
       </select>
 
       <select [(ngModel)]="nuevoProducto.material" style="padding: 8px; width: 150px">
@@ -60,13 +72,13 @@
         />
       </div>
 
-      <!-- Lo mismo para el stock -->
-      <div *ngIf="!editandoId()" style="display: flex; align-items: center; gap: 5px">
-        <span style="font-weight: bold; color: #495057">Stock inicial:</span>
+      <div style="display: flex; align-items: center; gap: 5px">
+        <span style="font-weight: bold; color: #495057">Stock Total:</span>
         <input
           type="number"
           [(ngModel)]="nuevoProducto.stock_real"
           style="padding: 8px; width: 80px"
+          min="0"
         />
       </div>
 
@@ -102,6 +114,117 @@
     </div>
   </div>
 
+  <div
+    style="
+      background: #e9ecef;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      max-width: 900px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      border: 1px solid #ccc;
+    "
+  >
+    <strong style="color: #495057">🔍 Buscar:</strong>
+
+    <input
+      type="text"
+      placeholder="Escribí código o descripción..."
+      [ngModel]="filtroTexto()"
+      (ngModelChange)="filtroTexto.set($event)"
+      style="
+        padding: 8px;
+        flex-grow: 1;
+        min-width: 200px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+      "
+    />
+
+    <select
+      [ngModel]="filtroCategoria()"
+      (ngModelChange)="filtroCategoria.set($event)"
+      style="padding: 8px; width: 150px; border: 1px solid #ced4da; border-radius: 4px"
+    >
+      <option value="">Todas las Categorías</option>
+      <option value="Collares">Collares</option>
+      <option value="Cadenas">Cadenas</option>
+      <option value="Dijes">Dijes</option>
+      <option value="Pulseras">Pulseras</option>
+      <option value="Aros">Aros</option>
+      <option value="Anillos">Anillos</option>
+    </select>
+
+    <select
+      [ngModel]="filtroMaterial()"
+      (ngModelChange)="filtroMaterial.set($event)"
+      style="padding: 8px; width: 150px; border: 1px solid #ced4da; border-radius: 4px"
+    >
+      <option value="">Todos los Materiales</option>
+      <option value="Acero">Acero</option>
+      <option value="Plata">Plata</option>
+      <option value="Cristal">Cristal</option>
+      <option value="Otro">Otro</option>
+    </select>
+  </div>
+
+  <div
+    *ngIf="productosSeleccionados().size > 0"
+    style="
+      background: #cce5ff;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      max-width: 900px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid #b8daff;
+    "
+  >
+    <strong style="color: #004085"
+      >✅ Seleccionadas: {{ productosSeleccionados().size }} joyas</strong
+    >
+
+    <div style="flex-grow: 1"></div>
+    <span style="font-weight: bold; color: #004085">Aplicar aumento del:</span>
+    <div style="display: flex; align-items: center; gap: 5px">
+      <input
+        type="number"
+        min="1"
+        [ngModel]="porcentajeAumento()"
+        (ngModelChange)="porcentajeAumento.set($event)"
+        style="
+          padding: 8px;
+          width: 70px;
+          border: 1px solid #ced4da;
+          border-radius: 4px;
+          text-align: center;
+        "
+      />
+      <span style="font-weight: bold; color: #004085; font-size: 18px">%</span>
+    </div>
+
+    <button
+      (click)="aplicarAumentoMasivo()"
+      style="
+        padding: 9px 15px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-left: 10px;
+      "
+    >
+      🚀 Actualizar Precios
+    </button>
+  </div>
+
   <table
     border="1"
     cellpadding="10"
@@ -115,6 +238,14 @@
   >
     <thead style="background-color: #343a40; color: white">
       <tr>
+        <th style="width: 40px; text-align: center">
+          <input
+            type="checkbox"
+            [checked]="todosEstanSeleccionados()"
+            (change)="toggleSeleccionarTodos($event)"
+            style="cursor: pointer; transform: scale(1.2)"
+          />
+        </th>
         <th>Código</th>
         <th>Categoría</th>
         <th>Material</th>
@@ -125,11 +256,24 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let prod of productos()">
+      <tr *ngFor="let prod of productosFiltrados()">
+        <td style="text-align: center">
+          <input
+            type="checkbox"
+            [checked]="productosSeleccionados().has(prod.id!)"
+            (change)="toggleSeleccion(prod.id!)"
+            style="cursor: pointer; transform: scale(1.2)"
+          />
+        </td>
         <td>
           <strong>{{ prod.codigo }}</strong>
         </td>
-        <td>{{ prod.categoria }}</td>
+        <td>
+          {{ prod.categoria }}
+          <span *ngIf="prod.medida" style="font-weight: bold; color: #007bff; font-size: 0.9em">
+            ({{ prod.medida }})
+          </span>
+        </td>
         <td>{{ prod.material }}</td>
         <td>{{ prod.nombre }}</td>
         <td>$ {{ prod.precio }}</td>
@@ -167,7 +311,7 @@
           </button>
         </td>
       </tr>
-      <tr *ngIf="productos().length === 0">
+      <tr *ngIf="productosFiltrados().length === 0">
         <td colspan="7" style="text-align: center; padding: 20px">
           No hay productos cargados en la base.
         </td>
