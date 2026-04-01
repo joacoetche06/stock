@@ -2,9 +2,10 @@ import express from "express";
 import cors from "cors";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
-
+import path from "path";
 const app = express();
 const PORT = 3001;
+// const path = require('path'); O
 
 // Middlewares
 app.use(cors());
@@ -483,6 +484,18 @@ app.delete("/api/vendedores/:id", async (req, res) => {
       .status(500)
       .json({ error: "No se puede eliminar. Probablemente ya tenga remitos." });
   }
+});
+
+// 1. Subimos un nivel (..) para salir de 'src' y entrar a 'public'
+app.use(
+  express.static(path.join(__dirname, "..", "public", "frontend", "browser")),
+);
+
+// 2. Lo mismo acá para encontrar el index.html
+app.get(/.*/, (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "..", "public", "frontend", "browser", "index.html"),
+  );
 });
 
 app.listen(PORT, () => {

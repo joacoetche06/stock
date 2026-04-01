@@ -1,0 +1,20 @@
+directories:
+  output: instalador-final
+  buildResources: build
+appId: com.joyeriaadri.stock
+productName: CHICAS Stock
+files:
+  - filter:
+      - dist/**/*
+      - public/**/*
+      - main.js
+      - package.json
+win:
+  target: nsis
+  icon: public/logo.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: CHICAS Stock
+electronVersion: 41.1.1

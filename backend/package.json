@@ -1,16 +1,37 @@
 {
-  "name": "backend",
+  "name": "chicas-stock",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
     "dev": "nodemon src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "start-escritorio": "electron main.js",
+    "empaquetar": "electron-builder --win"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "build": {
+    "appId": "com.joyeriaadri.stock",
+    "productName": "CHICAS Stock",
+    "directories": {
+      "output": "instalador-final"
+    },
+    "files": [
+      "dist/**/*",
+      "public/**/*",
+      "main.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "CHICAS Stock"
+    }
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
@@ -21,6 +42,8 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.4.0",
+    "electron": "^41.1.1",
+    "electron-builder": "^24.13.3",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
