@@ -5,8 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest 
-
+    runs-on: windows-2022
     steps:
       - name: Descargar el código
         uses: actions/checkout@v4
@@ -16,9 +15,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Actualizar herramientas de C++
+        run: npm install -g node-gyp
+
       - name: Instalar dependencias del Backend
         working-directory: ./backend
-        run: npm install
+        run: |
+          npm install sqlite3@latest
+          npm install
 
       - name: Compilar código TypeScript
         working-directory: ./backend
