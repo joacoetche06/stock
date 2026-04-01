@@ -1,0 +1,35 @@
+name: Generar Instalador Windows (EXE)
+
+on: 
+  workflow_dispatch: 
+
+jobs:
+  build:
+    runs-on: windows-latest 
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias del Backend
+        working-directory: ./backend
+        run: npm install
+
+      - name: Compilar código TypeScript
+        working-directory: ./backend
+        run: npm run build
+
+      - name: Empaquetar la aplicación con Electron
+        working-directory: ./backend
+        run: npm run empaquetar
+
+      - name: Guardar el .exe para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: Instalador-CHICAS-Windows
+          path: backend/instalador-final/*.exe
