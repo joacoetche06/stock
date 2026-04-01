@@ -1,52 +1,283 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
 /* =========================================
    REGLAS GLOBALES DE IMPRESIÓN (REMITOS)
    ========================================= */
 @media print {
-  /* 1. Apagamos el menú lateral y el layout que nos robaba 220px de espacio invisible */
-  app-root > div {
-    display: block !important;
-    margin: 0 !important;
+  /* 1. Margen mínimo para borrar los textos del navegador (URL, Fecha autogenerada) */
+  @page {
+    size: A4 portrait;
+    margin: 0.5cm;
   }
+
+  /* 2. Matamos las alturas forzadas para ELIMINAR LA HOJA EXTRA en blanco */
+  html,
+  body,
+  .app-container,
+  main {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* 3. Ocultamos la app y mostramos solo el remito */
   nav {
     display: none !important;
   }
-  main {
-    padding: 0 !important;
-  }
-
-  /* 2. Ocultamos el resto de la interfaz (botones, inputs, etc.) */
   body * {
     visibility: hidden;
   }
+
   #zona-impresion,
   #zona-impresion * {
     visibility: visible;
   }
 
-  /* 3. Forzamos la zona de impresión a usar el 100% real de la hoja */
   #zona-impresion {
     position: absolute;
     left: 0;
     top: 0;
     width: 100% !important;
-    padding: 0 !important;
+    padding: 1cm !important; /* Espacio interno elegante para que no se pegue a los bordes */
+    box-sizing: border-box;
   }
 
-  /* 4. Ajuste fino de la tabla para que no se corte la última columna */
+  /* 4. TABLA INTELIGENTE: Letra grande y sin cortar palabras */
   #zona-impresion table {
-    table-layout: fixed; /* Fuerza a la tabla a no estirarse más allá de la hoja */
+    table-layout: auto !important; /* Permite que las columnas se ensanchen según el texto */
     width: 100% !important;
-    font-size: 13px !important; /* Achicamos un pelín la letra */
+    font-size: 15px !important; /* Letra grande ideal para Adri */
   }
+
   #zona-impresion th,
   #zona-impresion td {
-    padding: 6px 4px !important; /* Le sacamos relleno lateral a las celdas */
-    word-wrap: break-word;
+    padding: 8px !important; /* Celdas más altas para que respire el texto */
+    word-wrap: normal !important;
+    white-space: normal !important; /* Si la descripción es larga, baja el texto entero, no lo corta */
   }
+}
+/* src/styles.css */
+:root {
+  --color-principal: #b87366; /* Cobre / Rose Gold del diamante */
+  --color-secundario: #f4d1d1; /* Rosa pastel de las flores */
+  --color-acento: #b5d8cc; /* Verde agua de las hojitas */
+  --color-texto: #2c3e50; /* Gris oscuro elegante para leer bien */
+  --color-fondo: #f8f9fa; /* Gris súper clarito de fondo general */
+  --color-blanco: #ffffff;
+}
 
-  /* 5. Le damos un margen estándar de impresora a la hoja A4 */
-  @page {
-    size: A4 portrait;
-    margin: 1cm;
-  }
+body {
+  margin: 0;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px; /* Letra base más grande y legible */
+  background-color: var(--color-fondo);
+  color: var(--color-texto);
+}
+
+/* Opcional: Un estilo genérico para las tablas y que queden más finas */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--color-blanco);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+thead th {
+  background-color: var(--color-texto) !important;
+  color: var(--color-blanco);
+  padding: 12px;
+}
+
+/* --- BOTONES GLOBALES --- */
+.btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-principal {
+  background-color: var(--color-principal);
+  color: var(--color-blanco);
+}
+
+.btn-exito {
+  background-color: #7b9e87; /* Verde Salvia (Hojas del logo) */
+  color: white;
+}
+
+.btn-advertencia {
+  background-color: #d4b483; /* Dorado suave / Arena */
+  color: white;
+}
+
+.btn-peligro {
+  background-color: #d98c8c; /* Rojo pastel apagado */
+  color: white;
+}
+
+.btn-secundario {
+  background-color: #95a5a6; /* Gris azulino premium */
+  color: white;
+}
+
+/* Botones elegantes para tablas (Outline) */
+.btn-editar {
+  background-color: transparent;
+  color: var(--color-principal);
+  border: 1px solid var(--color-principal);
+}
+.btn-editar:hover {
+  background-color: var(--color-principal);
+  color: var(--color-blanco);
+}
+
+.btn-eliminar {
+  background-color: transparent;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+}
+.btn-eliminar:hover {
+  background-color: #dc3545;
+  color: white;
+}
+
+/* Tarjetas / Contenedores */
+.tarjeta {
+  background: var(--color-blanco);
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  max-width: 900px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e9ecef;
+}
+
+.tarjeta-edicion {
+  border: 2px solid var(--color-principal);
+  background-color: #fdfaf9; /* Un tono super sutil del rose gold */
+}
+
+/* Inputs y Selects estándar */
+.input-form {
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+}
+.input-form:focus {
+  border-color: var(--color-principal);
+  box-shadow: 0 0 0 3px rgba(184, 115, 102, 0.2);
+}
+
+/* --- ESTILOS MODERNOS PARA SELECTS --- */
+select.input-form {
+  /* 1. Borramos la flecha por defecto del navegador */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  /* 2. Dibujamos una flecha SVG moderna color Rose Gold (%23B87366 es el hex) */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23B87366' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center; /* Ubicamos la flecha a la derecha */
+  background-size: 16px; /* Tamaño de la flechita */
+
+  /* 3. Ajustamos el padding para que el texto no pise la flecha nueva */
+  padding-right: 40px;
+  background-color: var(--color-blanco);
+  cursor: pointer;
+}
+
+/* Efecto hover suave para invitar al clic */
+select.input-form:hover {
+  border-color: var(--color-principal);
+}
+
+/* Solo para Firefox: quitar el borde punteado feo al hacer clic */
+select.input-form:-moz-focusring {
+  color: transparent;
+  text-shadow: 0 0 0 var(--color-texto);
+}
+
+/* --- CUSTOM SELECTS PREMIUM --- */
+.custom-select {
+  position: relative;
+  user-select: none;
+}
+
+.select-header {
+  padding: 10px 15px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background: var(--color-blanco);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--color-texto);
+  transition: all 0.2s ease;
+  height: 40px; /* Para que alineen perfecto con los inputs */
+  box-sizing: border-box;
+}
+
+.select-header:hover {
+  border-color: var(--color-principal);
+}
+
+.select-header.abierto {
+  border-color: var(--color-principal);
+  box-shadow: 0 0 0 3px rgba(184, 115, 102, 0.2);
+}
+
+.select-options {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  background: var(--color-blanco);
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  z-index: 1000; /* Para que quede por encima de la tabla */
+  overflow: hidden;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.option-item {
+  padding: 10px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+/* Efecto hover con los colores de CHICAS */
+.option-item:hover {
+  background-color: var(--color-secundario);
+  color: var(--color-principal);
+  font-weight: bold;
+}
+
+.option-placeholder {
+  color: #6c757d;
 }

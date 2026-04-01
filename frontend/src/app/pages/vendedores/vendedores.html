@@ -1,18 +1,7 @@
 <div>
-  <h2>Gestión de Vendedores</h2>
-
-  <div
-    [style.background]="editandoId() ? '#fff3cd' : '#e9ecef'"
-    style="
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      max-width: 600px;
-      border: 1px solid #ccc;
-    "
-  >
-    <h3 style="margin-top: 0">
-      {{ editandoId() ? '✏️ Editando Vendedora' : 'Cargar Nueva Vendedora' }}
+  <div [class]="editandoId() ? 'tarjeta tarjeta-edicion' : 'tarjeta'" style="max-width: 500px">
+    <h3 style="margin-top: 0; color: var(--color-principal)">
+      {{ editandoId() ? '✏️ Editando Vendedora' : '+ Cargar Nueva Vendedora' }}
     </h3>
 
     <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
@@ -20,107 +9,72 @@
         type="text"
         placeholder="Nombre completo"
         [(ngModel)]="nuevoVendedor.nombre"
-        style="padding: 8px; flex-grow: 1"
+        class="input-form"
+        style="flex-grow: 1"
       />
       <input
         type="text"
-        placeholder="Teléfono"
+        placeholder="Teléfono (Opcional)"
         [(ngModel)]="nuevoVendedor.telefono"
-        style="padding: 8px; width: 150px"
+        class="input-form"
+        style="width: 150px"
       />
 
       <button
         (click)="guardarVendedor()"
-        [style.background]="editandoId() ? '#ffc107' : '#007bff'"
-        style="
-          padding: 9px 15px;
-          color: black;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: bold;
-        "
+        [class]="editandoId() ? 'btn btn-advertencia' : 'btn btn-principal'"
       >
         {{ editandoId() ? '💾 Actualizar' : '+ Agregar' }}
       </button>
 
-      <button
-        *ngIf="editandoId()"
-        (click)="limpiarFormulario()"
-        style="
-          padding: 9px 15px;
-          background: #6c757d;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-        "
-      >
+      <button *ngIf="editandoId()" (click)="limpiarFormulario()" class="btn btn-secundario">
         Cancelar
       </button>
     </div>
   </div>
 
-  <table
-    border="1"
-    cellpadding="10"
-    style="
-      border-collapse: collapse;
-      width: 100%;
-      max-width: 600px;
-      text-align: left;
-      background: white;
-    "
-  >
-    <thead style="background-color: #343a40; color: white">
+  <table style="max-width: 540px">
+    <thead>
       <tr>
-        <th>ID</th>
-        <th>Nombre</th>
+        <th>Nombre de Vendedora</th>
         <th>Teléfono</th>
-        <th>Acciones</th>
+        <th style="text-align: center">Acciones</th>
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let vend of vendedores()">
-        <td># {{ vend.id }}</td>
-        <td>
+      <tr
+        *ngFor="let vend of vendedores()"
+        style="border-bottom: 1px solid #eee; text-align: center"
+      >
+        <td style="font-size: 1.1em; color: var(--color-texto)">
           <strong>{{ vend.nombre }}</strong>
         </td>
-        <td>{{ vend.telefono || 'Sin teléfono' }}</td>
-        <td>
+
+        <td [style.color]="vend.telefono ? 'inherit' : '#adb5bd'" style="font-size: 1.05em">
+          {{ vend.telefono || 'Sin teléfono' }}
+        </td>
+
+        <td style="display: flex; gap: 8px; justify-content: center">
           <button
             (click)="editar(vend)"
-            style="
-              background: #ffc107;
-              border: none;
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-weight: bold;
-            "
+            class="btn btn-editar"
+            style="padding: 6px 12px; font-size: 0.9em"
           >
-            Editar
+            ✏️ Editar
           </button>
-
           <button
             (click)="eliminar(vend.id!)"
-            style="
-              background: #dc3545;
-              color: white;
-              border: none;
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-weight: bold;
-              margin-left: 5px;
-            "
+            class="btn btn-eliminar"
+            style="padding: 6px 12px; font-size: 0.9em"
           >
-            Eliminar
+            🗑️ Eliminar
           </button>
         </td>
       </tr>
       <tr *ngIf="vendedores().length === 0">
-        <td colspan="4" style="text-align: center; padding: 20px">No hay vendedoras cargadas.</td>
+        <td colspan="3" style="text-align: center; padding: 30px; color: #6c757d; font-size: 1.1em">
+          Aún no hay vendedoras cargadas en el sistema.
+        </td>
       </tr>
     </tbody>
   </table>

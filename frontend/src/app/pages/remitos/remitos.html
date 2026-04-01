@@ -1,29 +1,54 @@
 <div>
-  <h2>Gestión de Remitos</h2>
-
-  <div
-    style="
-      background: #e9ecef;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-      max-width: 800px;
-    "
-  >
-    <h3 style="margin-top: 0; border-bottom: 2px solid #ccc; padding-bottom: 10px">Nuevo Remito</h3>
+  <div class="tarjeta" style="max-width: 800px">
+    <h3
+      style="
+        margin-top: 0;
+        border-bottom: 2px solid #ccc;
+        padding-bottom: 10px;
+        color: var(--color-principal);
+      "
+    >
+      Nuevo Remito
+    </h3>
 
     <div style="margin-bottom: 15px">
       <label style="font-weight: bold; display: block; margin-bottom: 5px"
         >1. Seleccionar Vendedora:</label
       >
-      <select
-        [ngModel]="vendedorSeleccionado()"
-        (ngModelChange)="vendedorSeleccionado.set($event)"
-        style="padding: 8px; width: 100%; max-width: 300px"
-      >
-        <option value="">-- Elegir vendedora --</option>
-        <option *ngFor="let v of vendedores()" [value]="v.id">{{ v.nombre }}</option>
-      </select>
+
+      <div class="custom-select" style="max-width: 300px">
+        <div
+          class="select-header"
+          [class.abierto]="dropdownAbierto() === 'nuevo-vend'"
+          (click)="toggleDropdown('nuevo-vend', $event)"
+        >
+          <span [class.option-placeholder]="!vendedorSeleccionado()">{{
+            obtenerNombreVendedorSeleccionado() || 'Elegir vendedora'
+          }}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#B87366"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [style.transform]="dropdownAbierto() === 'nuevo-vend' ? 'rotate(180deg)' : 'rotate(0)'"
+            style="transition: transform 0.2s"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+        <div class="select-options" *ngIf="dropdownAbierto() === 'nuevo-vend'">
+          <div class="option-item option-placeholder" (click)="setVendedorNuevo('')">
+            Elegir vendedora
+          </div>
+          <div class="option-item" *ngFor="let v of vendedores()" (click)="setVendedorNuevo(v.id!)">
+            {{ v.nombre }}
+          </div>
+        </div>
+      </div>
     </div>
 
     <div style="margin-bottom: 15px">
@@ -40,87 +65,58 @@
             (ngModelChange)="buscarJoya($event)"
             (focus)="mostrarDropdown.set(true)"
             (blur)="ocultarDropdown()"
-            style="
-              padding: 10px;
-              width: 100%;
-              box-sizing: border-box;
-              border: 1px solid #ced4da;
-              border-radius: 4px;
-              font-size: 14px;
-            "
+            class="input-form"
+            style="width: 100%; box-sizing: border-box; height: auto"
             autocomplete="off"
           />
 
           <div
             *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
-            style="
-              position: absolute;
-              top: 100%;
-              left: 0;
-              right: 0;
-              background: white;
-              border: 1px solid #ccc;
-              z-index: 1000;
-              max-height: 250px;
-              overflow-y: auto;
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-              border-radius: 0 0 4px 4px;
-            "
+            class="select-options"
+            style="top: 100%"
           >
             <div
               *ngFor="let p of productosDisponibles()"
               (mousedown)="seleccionarProducto(p)"
+              class="option-item"
               style="
-                padding: 10px;
-                cursor: pointer;
-                border-bottom: 1px solid #eee;
-                transition: background 0.2s;
+                display: flex;
+                justify-content: space-between;
+                border-bottom: 1px solid #f8f9fa;
               "
-              onmouseover="this.style.backgroundColor = '#f1f3f5'"
-              onmouseout="this.style.backgroundColor = 'white'"
             >
-              <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
-              <span *ngIf="p.material" style="color: #6c757d; font-size: 0.9em; font-style: italic">
-                ({{ p.material }})
-                <span *ngIf="p.medida" style="font-weight: bold; color: #007bff; font-size: 0.9em">
-                  ({{ p.medida }})
+              <span>
+                <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
+                <span
+                  *ngIf="p.material"
+                  style="color: #6c757d; font-size: 0.9em; font-style: italic"
+                >
+                  ({{ p.material }})
+                  <span
+                    *ngIf="p.medida"
+                    style="font-weight: bold; color: var(--color-principal); font-size: 0.9em"
+                    >({{ p.medida }})</span
+                  >
                 </span>
               </span>
-
-              <span style="color: #28a745; font-size: 0.85em; float: right; font-weight: bold"
+              <span style="color: #28a745; font-size: 0.85em; font-weight: bold"
                 >Disp: {{ p.stock_disponible }}</span
               >
             </div>
           </div>
         </div>
+
         <input
           type="number"
           min="1"
           [ngModel]="cantidadSeleccionada()"
           (ngModelChange)="cantidadSeleccionada.set($event)"
-          style="
-            padding: 10px;
-            width: 80px;
-            box-sizing: border-box;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-          "
+          class="input-form"
+          style="width: 60px; height: auto; text-align: center"
           placeholder="Cant"
         />
 
-        <button
-          (click)="agregarAlRemito()"
-          style="
-            padding: 10px 15px;
-            background: #17a2b8;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            height: 100%;
-          "
-        >
+        <button (click)="agregarAlRemito()" class="btn btn-principal" style="height: auto">
           Añadir a lista ↓
         </button>
       </div>
@@ -129,14 +125,14 @@
     <div
       *ngIf="itemsCarrito().length > 0"
       style="
-        background: white;
+        background: #fdfaf9;
         padding: 15px;
-        border-radius: 5px;
-        border: 1px solid #ccc;
-        margin-bottom: 15px;
+        border-radius: 8px;
+        border: 1px solid #f4d1d1;
+        margin-bottom: 20px;
       "
     >
-      <h4 style="margin-top: 0; color: #333">Detalle de entrega:</h4>
+      <h4 style="margin-top: 0; color: var(--color-principal)">Detalle de entrega:</h4>
       <ul style="padding-left: 0; list-style: none">
         <li
           *ngFor="let item of itemsCarrito(); let i = index"
@@ -154,25 +150,19 @@
             [(ngModel)]="item.cantidad"
             min="1"
             [max]="item.stock_maximo"
-            style="width: 60px; padding: 5px; font-weight: bold; text-align: center"
+            class="input-form"
+            style="width: 65px; padding: 5px; font-weight: bold; text-align: center"
           />
-
           <span style="flex-grow: 1">
             <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
             <span style="font-size: 0.85em; color: #6c757d">(Máx: {{ item.stock_maximo }})</span>
           </span>
-
           <button
             (click)="quitarDelRemito(i)"
-            style="
-              color: #dc3545;
-              border: none;
-              background: none;
-              cursor: pointer;
-              font-weight: bold;
-            "
+            class="btn btn-eliminar"
+            style="padding: 4px 8px; font-size: 0.85em"
           >
-            [X] Quitar
+            Quitar
           </button>
         </li>
       </ul>
@@ -180,70 +170,80 @@
 
     <button
       (click)="guardarRemitoFinal()"
-      style="
-        padding: 12px 20px;
-        background: #28a745;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 16px;
-        width: 100%;
-      "
+      class="btn btn-exito"
+      style="width: 100%; font-size: 16px; padding: 12px"
     >
       💾 CONFIRMAR Y GUARDAR REMITO
     </button>
   </div>
 
   <div
+    class="tarjeta"
     style="
-      margin-bottom: 15px;
       display: flex;
       align-items: center;
       gap: 10px;
-      background: #e9ecef;
-      padding: 10px 15px;
-      border-radius: 5px;
       max-width: 800px;
-      box-sizing: border-box;
+      background-color: #f1f3f5;
     "
   >
-    <strong style="color: #495057">🔍 Filtrar historial:</strong>
-    <select
-      [ngModel]="filtroVendedor()"
-      (ngModelChange)="filtroVendedor.set($event)"
-      style="padding: 8px; min-width: 200px; border: 1px solid #ced4da; border-radius: 4px"
-    >
-      <option value="">Todas las vendedoras</option>
-      <option *ngFor="let v of vendedores()" [value]="v.nombre">{{ v.nombre }}</option>
-    </select>
+    <strong style="color: var(--color-texto)">🔍 Filtrar historial:</strong>
+
+    <div class="custom-select" style="min-width: 250px">
+      <div
+        class="select-header"
+        [class.abierto]="dropdownAbierto() === 'filtro-vend'"
+        (click)="toggleDropdown('filtro-vend', $event)"
+      >
+        <span>{{ filtroVendedor() || 'Todas las vendedoras' }}</span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#B87366"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          [style.transform]="dropdownAbierto() === 'filtro-vend' ? 'rotate(180deg)' : 'rotate(0)'"
+          style="transition: transform 0.2s"
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+      <div class="select-options" *ngIf="dropdownAbierto() === 'filtro-vend'">
+        <div class="option-item option-placeholder" (click)="setVendedorFiltro('')">
+          Todas las vendedoras
+        </div>
+        <div
+          class="option-item"
+          *ngFor="let v of vendedores()"
+          (click)="setVendedorFiltro(v.nombre)"
+        >
+          {{ v.nombre }}
+        </div>
+      </div>
+    </div>
   </div>
 
-  <h3>Historial de Remitos Emitidos</h3>
-  <table
-    border="1"
-    cellpadding="10"
-    style="
-      border-collapse: collapse;
-      width: 100%;
-      max-width: 800px;
-      text-align: left;
-      background: white;
-    "
-  >
-    <thead style="background-color: #343a40; color: white">
+  <h3 style="color: var(--color-texto)">Historial de Remitos Emitidos</h3>
+
+  <table style="max-width: 800px">
+    <thead>
       <tr>
-        <th>Nro Remito</th>
-        <th>Fecha</th>
-        <th>Vendedora</th>
-        <th>Estado</th>
-        <th>Acciones</th>
+        <th style="text-align: center">Nro Remito</th>
+        <th style="text-align: center">Fecha</th>
+        <th style="text-align: center">Vendedora</th>
+        <th style="text-align: center">Estado</th>
+        <th style="text-align: center">Acciones</th>
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let r of remitosFiltrados()">
-        <td># {{ r.id }}</td>
+      <tr
+        *ngFor="let r of remitosFiltrados()"
+        style="text-align: center; border-bottom: 1px solid #eee"
+      >
+        <td style="color: #6c757d; font-weight: bold"># {{ r.id }}</td>
         <td>{{ r.fecha_salida }}</td>
         <td>
           <strong>{{ r.vendedor }}</strong>
@@ -256,90 +256,76 @@
             {{ r.estado }}
           </span>
         </td>
-        <td>
-          <button
-            (click)="abrirDetalle(r)"
-            style="
-              background: #17a2b8;
-              color: white;
-              border: none;
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-weight: bold;
-              margin-right: 5px;
-            "
-          >
-            Ver
+        <td style="display: flex; gap: 5px; justify-content: center">
+          <button (click)="abrirDetalle(r)" class="btn btn-secundario" style="padding: 6px 10px">
+            👁️ Ver
           </button>
           <button
             *ngIf="r.estado === 'Pendiente'"
             (click)="abrirPanelCierre(r)"
-            style="
-              background: #ffc107;
-              border: none;
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-weight: bold;
-            "
+            class="btn btn-advertencia"
+            style="padding: 6px 10px"
           >
             Cerrar
           </button>
         </td>
       </tr>
       <tr *ngIf="remitosFiltrados().length === 0">
-        <td colspan="5" style="text-align: center; padding: 20px">Aún no se generaron remitos.</td>
+        <td colspan="5" style="text-align: center; padding: 30px; color: #6c757d">
+          Aún no se generaron remitos.
+        </td>
       </tr>
     </tbody>
   </table>
 
   <div
     *ngIf="remitoEnCierre()"
-    style="
-      margin-top: 20px;
-      background: #fff3cd;
-      padding: 20px;
-      border-radius: 8px;
-      border: 1px solid #ffeeba;
-      max-width: 800px;
-    "
+    class="tarjeta tarjeta-edicion"
+    style="margin-top: 30px; background-color: #fffdf5; border-color: #ffc107"
   >
-    <h3 style="margin-top: 0; color: #856404">
+    <h3 style="margin-top: 0; color: #d39e00">
       Cerrando Remito #{{ remitoEnCierre().id }} - {{ remitoEnCierre().vendedor }}
     </h3>
 
-    <table
-      border="1"
-      cellpadding="8"
-      style="border-collapse: collapse; width: 100%; background: white; margin-bottom: 15px"
-    >
+    <table style="margin-bottom: 15px">
       <thead style="background: #ffeeba">
         <tr>
-          <th>Producto</th>
-          <th>Se llevó</th>
-          <th>Vendidos</th>
-          <th>Devueltos</th>
+          <th style="background-color: #ffc107 !important; color: #212529; text-align: left">
+            Producto
+          </th>
+          <th style="background-color: #ffc107 !important; color: #212529; text-align: center">
+            Se llevó
+          </th>
+          <th style="background-color: #ffc107 !important; color: #212529; text-align: center">
+            Vendidos
+          </th>
+          <th style="background-color: #ffc107 !important; color: #212529; text-align: center">
+            Devueltos
+          </th>
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let item of itemsEnCierre()">
-          <td>{{ item.codigo }} - {{ item.nombre }}</td>
-          <td style="text-align: center; font-weight: bold">{{ item.cantidad_entregada }}</td>
-          <td>
+        <tr *ngFor="let item of itemsEnCierre()" style="border-bottom: 1px solid #eee">
+          <td style="text-align: left">{{ item.codigo }} - {{ item.nombre }}</td>
+          <td style="text-align: center; font-weight: bold; font-size: 1.1em">
+            {{ item.cantidad_entregada }}
+          </td>
+          <td style="text-align: center">
             <input
               type="number"
               min="0"
               [(ngModel)]="item.cantidad_vendida"
-              style="width: 60px; padding: 5px"
+              class="input-form"
+              style="width: 60px; text-align: center"
             />
           </td>
-          <td>
+          <td style="text-align: center">
             <input
               type="number"
               min="0"
               [(ngModel)]="item.cantidad_devuelta"
-              style="width: 60px; padding: 5px"
+              class="input-form"
+              style="width: 60px; text-align: center"
             />
           </td>
         </tr>
@@ -347,105 +333,59 @@
     </table>
 
     <div style="display: flex; gap: 10px; justify-content: flex-end">
-      <button
-        (click)="cancelarCierre()"
-        style="
-          padding: 10px 15px;
-          background: #6c757d;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-        "
-      >
-        Cancelar
-      </button>
-      <button
-        (click)="confirmarCierre()"
-        style="
-          padding: 10px 15px;
-          background: #28a745;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          font-weight: bold;
-          cursor: pointer;
-        "
-      >
-        Guardar y Actualizar Stock
-      </button>
+      <button (click)="cancelarCierre()" class="btn btn-secundario">Cancelar</button>
+      <button (click)="confirmarCierre()" class="btn btn-exito">Guardar y Actualizar Stock</button>
     </div>
   </div>
 
   <div
     *ngIf="remitoEnDetalle()"
-    style="
-      margin-top: 20px;
-      background: #e2e3e5;
-      padding: 20px;
-      border-radius: 8px;
-      border: 1px solid #d6d8db;
-      max-width: 800px;
-    "
+    class="tarjeta"
+    style="margin-top: 30px; background-color: #f8f9fa"
   >
-    <h3 style="margin-top: 0; color: #383d41">
+    <h3 style="margin-top: 0; color: var(--color-texto)">
       Detalle del Remito #{{ remitoEnDetalle().id }} - {{ remitoEnDetalle().vendedor }}
     </h3>
-    <p style="margin-bottom: 15px">
-      <strong>Estado:</strong> {{ remitoEnDetalle().estado }} | <strong>Fecha de salida:</strong>
-      {{ remitoEnDetalle().fecha_salida }}
+    <p style="margin-bottom: 15px; color: #6c757d">
+      <strong>Estado:</strong>
+      <span [style.color]="remitoEnDetalle().estado === 'Pendiente' ? '#ffc107' : '#28a745'">{{
+        remitoEnDetalle().estado
+      }}</span>
+      | <strong>Fecha de salida:</strong> {{ remitoEnDetalle().fecha_salida }}
     </p>
 
-    <table
-      border="1"
-      cellpadding="8"
-      style="border-collapse: collapse; width: 100%; background: white; margin-bottom: 15px"
-    >
-      <thead style="background: #d6d8db">
+    <table style="margin-bottom: 20px">
+      <thead style="background: #e9ecef">
         <tr>
-          <th>Producto</th>
-          <th>Se llevó</th>
-          <th>Vendidos</th>
-          <th>Devueltos</th>
+          <th style="background-color: #6c757d !important; text-align: left">Producto</th>
+          <th style="background-color: #6c757d !important; text-align: center">Se llevó</th>
+          <th style="background-color: #6c757d !important; text-align: center">Vendidos</th>
+          <th style="background-color: #6c757d !important; text-align: center">Devueltos</th>
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let item of itemsEnDetalle()">
-          <td>{{ item.codigo }} - {{ item.nombre }}</td>
+        <tr *ngFor="let item of itemsEnDetalle()" style="border-bottom: 1px solid #eee">
+          <td style="text-align: left">{{ item.codigo }} - {{ item.nombre }}</td>
           <td style="text-align: center; font-weight: bold">{{ item.cantidad_entregada }}</td>
           <td style="text-align: center; color: #28a745; font-weight: bold">
             {{ remitoEnDetalle().estado === 'Pendiente' ? '-' : item.cantidad_vendida }}
           </td>
-          <td style="text-align: center">
+          <td style="text-align: center; color: #dc3545; font-weight: bold">
             {{ remitoEnDetalle().estado === 'Pendiente' ? '-' : item.cantidad_devuelta }}
           </td>
         </tr>
       </tbody>
     </table>
-    <!-- BOTÓN PARA IMPRIMIR -->
-    <div style="margin-bottom: 20px">
-      <button
-        (click)="imprimirRemito()"
-        style="
-          padding: 10px 15px;
-          background: #007bff;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: bold;
-        "
-      >
-        🖨️ Imprimir Remito
-      </button>
+
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <button (click)="imprimirRemito()" class="btn btn-principal">🖨️ Imprimir Remito</button>
+      <button (click)="cerrarDetalle()" class="btn btn-secundario">Cerrar Vista</button>
     </div>
 
-    <!-- ZONA DE IMPRESIÓN (Solo visible al imprimir gracias al CSS) -->
     <div
       id="zona-impresion"
       style="background: white; padding: 20px; font-family: Arial, sans-serif"
     >
-      <!-- Encabezado igual al papel con LOGO -->
       <div
         style="
           display: flex;
@@ -455,11 +395,7 @@
           margin-bottom: 15px;
         "
       >
-        <!-- Acordate de usar la misma ruta de imagen que te funcionó en el menú lateral (ej: logo.jpg o assets/logo.jpg) -->
         <img src="logo.png" alt="Logo" style="height: 140px; width: auto; border-radius: 8px" />
-        <!-- <h2 style="margin: 0; text-transform: uppercase; font-size: 24px">
-          CHICAS DE BUENOS AIRES
-        </h2> -->
       </div>
       <p
         style="
@@ -475,7 +411,6 @@
         Fecha: {{ remitoEnDetalle().fecha_salida }} | Remito Nº: {{ remitoEnDetalle().id }}
       </p>
 
-      <!-- Iteramos por cada Categoría -->
       <div *ngFor="let categoria of itemsAgrupados() | keyvalue" style="margin-bottom: 20px">
         <h3
           style="
@@ -488,35 +423,108 @@
         >
           {{ categoria.key }}
         </h3>
-
         <table
           border="1"
           cellpadding="5"
-          style="border-collapse: collapse; width: 100%; font-size: 14px; text-align: left"
+          style="
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 14px;
+            text-align: left;
+            box-shadow: none;
+            border-radius: 0;
+          "
         >
           <thead>
             <tr style="background-color: #e9ecef">
-              <th style="width: 10%">Código</th>
-              <th style="width: 35%">Producto</th>
-              <th style="width: 15%">Material</th>
-              <th style="width: 10%">Precio ($)</th>
-              <th style="width: 10%; text-align: center">Entregada</th>
-              <th style="width: 10%; text-align: center">Vendido</th>
-              <th style="width: 10%; text-align: center">Devuelto</th>
+              <th
+                style="
+                  width: 10%;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Código
+              </th>
+              <th
+                style="
+                  width: 35%;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Producto
+              </th>
+              <th
+                style="
+                  width: 15%;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Material
+              </th>
+              <th
+                style="
+                  width: 10%;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Precio
+              </th>
+              <th
+                style="
+                  width: 10%;
+                  text-align: center;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Entregada
+              </th>
+              <th
+                style="
+                  width: 10%;
+                  text-align: center;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Vendido
+              </th>
+              <th
+                style="
+                  width: 10%;
+                  text-align: center;
+                  background-color: #e9ecef !important;
+                  color: black;
+                  border: 1px solid black;
+                "
+              >
+                Devuelto
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let item of categoria.value">
-              <td>{{ item.codigo }}</td>
-              <td>{{ item.nombre }}</td>
-              <td>{{ item.material }}</td>
-              <td>${{ item.precio }}</td>
-              <td style="text-align: center; font-weight: bold">{{ item.cantidad_entregada }}</td>
-              <!-- Dejamos el espacio en blanco para que llene a mano, o mostramos si ya está cerrado -->
-              <td style="text-align: center">
+              <td style="border: 1px solid black">{{ item.codigo }}</td>
+              <td style="border: 1px solid black">{{ item.nombre }}</td>
+              <td style="border: 1px solid black">{{ item.material }}</td>
+              <td style="border: 1px solid black">${{ item.precio }}</td>
+              <td style="text-align: center; font-weight: bold; border: 1px solid black">
+                {{ item.cantidad_entregada }}
+              </td>
+              <td style="text-align: center; border: 1px solid black">
                 {{ remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_vendida }}
               </td>
-              <td style="text-align: center">
+              <td style="text-align: center; border: 1px solid black">
                 {{ remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_devuelta }}
               </td>
             </tr>
@@ -524,7 +532,6 @@
         </table>
       </div>
 
-      <!-- Pie de página con las firmas -->
       <div style="margin-top: 40px; font-size: 16px">
         <p>Total vendido: __________________________</p>
         <p>Dinero a rendir: ________________________</p>
@@ -532,23 +539,6 @@
           Firma vendedora ({{ remitoEnDetalle().vendedor }}): __________________
         </p>
       </div>
-    </div>
-    <!-- FIN ZONA DE IMPRESIÓN -->
-    <div style="text-align: right">
-      <button
-        (click)="cerrarDetalle()"
-        style="
-          padding: 10px 15px;
-          background: #6c757d;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: bold;
-        "
-      >
-        Cerrar Vista
-      </button>
     </div>
   </div>
 </div>

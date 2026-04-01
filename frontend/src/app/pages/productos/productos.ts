@@ -1,8 +1,8 @@
-import { Component, signal, afterNextRender, computed } from '@angular/core';
+import { Component, signal, afterNextRender, computed, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ProductoService, Producto } from '../../services/producto.service';
-
+import Swal from 'sweetalert2';
 @Component({
   selector: 'app-productos',
   standalone: true,
@@ -53,7 +53,49 @@ export class ProductosComponent {
     stock_disponible: 0,
   };
 
-  // (Asegurate de hacer lo mismo dentro de tu función limpiarFormulario())
+  // --- CONTROL DE MENÚS DESPLEGABLES CUSTOM ---
+  dropdownAbierto = signal<string>(''); // Guarda el nombre del menú que está abierto
+
+  // Este HostListener escucha los clics en toda la página.
+  // Si hacés clic afuera de un menú, los cierra todos.
+  @HostListener('document:click')
+  cerrarDropdowns() {
+    this.dropdownAbierto.set('');
+  }
+
+  // Abre o cierra un menú específico
+  toggleDropdown(menu: string, event: Event) {
+    event.stopPropagation(); // Evita que el clic llegue al document y lo cierre al instante
+    this.dropdownAbierto.set(this.dropdownAbierto() === menu ? '' : menu);
+  }
+
+  // --- SETTERS PARA EL FORMULARIO ---
+  setCategoriaForm(cat: string) {
+    this.nuevoProducto.categoria = cat;
+    if (cat !== 'Cadenas') this.nuevoProducto.medida = ''; // Limpiamos medida si no es cadena
+    this.dropdownAbierto.set(''); // Cerramos menú
+  }
+
+  setMedidaForm(med: string) {
+    this.nuevoProducto.medida = med;
+    this.dropdownAbierto.set('');
+  }
+
+  setMaterialForm(mat: string) {
+    this.nuevoProducto.material = mat;
+    this.dropdownAbierto.set('');
+  }
+
+  // --- SETTERS PARA LOS FILTROS DE BÚSQUEDA ---
+  setCategoriaFiltro(cat: string) {
+    this.filtroCategoria.set(cat);
+    this.dropdownAbierto.set('');
+  }
+
+  setMaterialFiltro(mat: string) {
+    this.filtroMaterial.set(mat);
+    this.dropdownAbierto.set('');
+  }
 
   constructor(private productoService: ProductoService) {
     afterNextRender(() => {
@@ -69,22 +111,85 @@ export class ProductosComponent {
   }
 
   guardarProducto() {
-    // 1. Validamos que no intente guardar un producto en blanco
-    if (!this.nuevoProducto.nombre || !this.nuevoProducto.categoria) {
-      alert('Por favor elegí la categoría y escribí la descripción de la joya.');
-      return; // Cortamos la ejecución acá para que no rompa el backend
+    // 1. Validaciones obligatorias (Todo menos el nombre/descripción)
+
+    if (!this.nuevoProducto.categoria) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Falta la Categoría',
+        text: 'Por favor seleccioná qué tipo de joya es (Cadena, Anillo, etc.).',
+        confirmButtonColor: '#B87366',
+      });
+      return;
+    }
+
+    // Validación especial: Si es cadena, obligamos a que tenga medida
+    if (this.nuevoProducto.categoria === 'Cadenas' && !this.nuevoProducto.medida) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Falta la Medida',
+        text: 'Como elegiste "Cadenas", por favor seleccioná de cuántos cm es.',
+        confirmButtonColor: '#B87366',
+      });
+      return;
+    }
+
+    if (!this.nuevoProducto.material) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Falta el Material',
+        text: 'Por favor seleccioná de qué material está hecha la joya.',
+        confirmButtonColor: '#B87366',
+      });
+      return;
+    }
+
+    // Validamos que precio y stock no estén vacíos y no sean negativos
+    if (
+      this.nuevoProducto.precio === null ||
+      this.nuevoProducto.precio === undefined ||
+      this.nuevoProducto.precio < 0
+    ) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Falta el Precio',
+        text: 'Por favor ingresá un precio válido (mayor o igual a cero).',
+        confirmButtonColor: '#B87366',
+      });
+      return;
+    }
+
+    if (
+      this.nuevoProducto.stock_real === null ||
+      this.nuevoProducto.stock_real === undefined ||
+      this.nuevoProducto.stock_real < 0
+    ) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Falta el Stock',
+        text: 'Por favor ingresá la cantidad de unidades que tenés de esta joya.',
+        confirmButtonColor: '#B87366',
+      });
+      return;
     }
 
     // Modo EDICIÓN
     if (this.editandoId()) {
       this.productoService.editarProducto(this.editandoId()!, this.nuevoProducto).subscribe({
         next: () => {
+          Swal.fire({
+            icon: 'success',
+            title: '¡Actualizado!',
+            text: 'El producto se modificó correctamente.',
+            timer: 1500,
+            showConfirmButton: false,
+          });
           this.cargarProductos();
           this.limpiarFormulario();
         },
         error: (err) => {
           console.error(err);
-          alert('Error al actualizar el producto.');
+          Swal.fire('Error', 'Error al actualizar el producto.', 'error');
         },
       });
     }
@@ -92,20 +197,23 @@ export class ProductosComponent {
     else {
       this.nuevoProducto.stock_disponible = this.nuevoProducto.stock_real;
       this.productoService.crearProducto(this.nuevoProducto).subscribe({
-        next: (respuestaDelBackend: any) => {
-          // 🎉 Cartel de éxito dinámico con el nuevo código
-          alert(`¡Guardado exitoso! Se generó el código: ${respuestaDelBackend.codigo}`);
+        next: (respuesta: any) => {
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado exitoso!',
+            html: `Se generó el código: <b>${respuesta.codigo}</b>`,
+            confirmButtonColor: '#B87366',
+          });
           this.cargarProductos();
           this.limpiarFormulario();
         },
         error: (err) => {
           console.error(err);
-          alert('Hubo un error en el servidor. Revisá la terminal negra de Node.js');
+          Swal.fire('Error', 'Hubo un error en el servidor.', 'error');
         },
       });
     }
   }
-
   // --- NUEVO: Selección y Aumento Masivo ---
   productosSeleccionados = signal<Set<number>>(new Set());
   porcentajeAumento = signal<number | null>(null);
@@ -144,24 +252,33 @@ export class ProductosComponent {
     const ids = Array.from(this.productosSeleccionados());
 
     if (!porcentaje || porcentaje <= 0) {
-      return alert('Por favor, ingresá un porcentaje de aumento válido (mayor a 0).');
+      // Mostrar el cartel y luego cortar la ejecución (return vacío)
+      Swal.fire('Atención', 'Ingresá un porcentaje de aumento válido (mayor a 0).', 'warning');
+      return;
     }
 
-    if (
-      confirm(
-        `¿Estás seguro de aplicar un aumento del ${porcentaje}% a las ${ids.length} joyas seleccionadas?`,
-      )
-    ) {
-      this.productoService.aumentoMasivo(ids, porcentaje).subscribe({
-        next: () => {
-          alert('✅ Precios actualizados masivamente con éxito.');
-          this.productosSeleccionados.set(new Set()); // Limpiamos las cajitas
-          this.porcentajeAumento.set(null); // Limpiamos el input
-          this.cargarProductos(); // Refrescamos los nuevos precios
-        },
-        error: () => alert('Hubo un error al actualizar los precios.'),
-      });
-    }
+    Swal.fire({
+      title: '¿Aplicar aumento?',
+      text: `Se aumentará un ${porcentaje}% el precio de ${ids.length} joyas.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#B87366',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sí, aplicar',
+      cancelButtonText: 'Cancelar',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.productoService.aumentoMasivo(ids, porcentaje).subscribe({
+          next: () => {
+            Swal.fire('¡Listo!', 'Precios actualizados masivamente.', 'success');
+            this.productosSeleccionados.set(new Set());
+            this.porcentajeAumento.set(null);
+            this.cargarProductos();
+          },
+          error: () => Swal.fire('Error', 'Hubo un problema al actualizar precios.', 'error'),
+        });
+      }
+    });
   }
 
   // Cuando hacemos clic en el botón "Editar" de la tabla
@@ -187,15 +304,27 @@ export class ProductosComponent {
   }
 
   eliminar(id: number) {
-    if (confirm('¿Estás seguro de que querés eliminar este producto?')) {
-      this.productoService.eliminarProducto(id).subscribe({
-        next: () => {
-          this.cargarProductos();
-          if (this.editandoId() === id) this.limpiarFormulario();
-        },
-        error: () =>
-          alert('No se puede eliminar este producto porque ya está incluido en algún remito.'),
-      });
-    }
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: 'No podrás revertir esto.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.productoService.eliminarProducto(id).subscribe({
+          next: () => {
+            Swal.fire('Eliminado', 'La joya fue eliminada del sistema.', 'success');
+            this.cargarProductos();
+            if (this.editandoId() === id) this.limpiarFormulario();
+          },
+          error: () =>
+            Swal.fire('No se puede', 'Esta joya ya está incluida en algún remito.', 'error'),
+        });
+      }
+    });
   }
 }

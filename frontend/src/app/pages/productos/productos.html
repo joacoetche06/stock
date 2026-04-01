@@ -1,242 +1,283 @@
 <div>
-  <h2>Gestión de Inventario</h2>
-
-  <div
-    [style.background]="editandoId() ? '#fff3cd' : '#e9ecef'"
-    style="
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      max-width: 900px;
-      border: 1px solid #ccc;
-    "
-  >
-    <h3 style="margin-top: 0">
-      {{ editandoId() ? '✏️ Editando Producto' : 'Ingresar Nuevo Producto' }}
+  <div [class]="editandoId() ? 'tarjeta tarjeta-edicion' : 'tarjeta'">
+    <h3 style="margin-top: 0; color: var(--color-principal)">
+      {{ editandoId() ? '✏️ Editando Producto' : '+ Ingresar Nuevo Producto' }}
     </h3>
 
     <div
       style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px"
     >
-      <select
-        [(ngModel)]="nuevoProducto.categoria"
-        (change)="nuevoProducto.medida = ''"
-        style="padding: 8px; width: 150px"
-      >
-        <option value="">-- Categoría --</option>
-        <option value="Collares">Collares</option>
-        <option value="Cadenas">Cadenas</option>
-        <option value="Dijes">Dijes</option>
-        <option value="Pulseras">Pulseras</option>
-        <option value="Aros">Aros</option>
-        <option value="Anillos">Anillos</option>
-      </select>
+      <div class="custom-select" style="width: 150px">
+        <div
+          class="select-header"
+          [class.abierto]="dropdownAbierto() === 'form-cat'"
+          (click)="toggleDropdown('form-cat', $event)"
+        >
+          <span [class.option-placeholder]="!nuevoProducto.categoria">{{
+            nuevoProducto.categoria || 'Categoría'
+          }}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#B87366"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [style.transform]="dropdownAbierto() === 'form-cat' ? 'rotate(180deg)' : 'rotate(0)'"
+            style="transition: transform 0.2s"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+        <div class="select-options" *ngIf="dropdownAbierto() === 'form-cat'">
+          <div class="option-item" (click)="setCategoriaForm('')">------</div>
+          <div class="option-item" (click)="setCategoriaForm('Collares')">Collares</div>
+          <div class="option-item" (click)="setCategoriaForm('Cadenas')">Cadenas</div>
+          <div class="option-item" (click)="setCategoriaForm('Dijes')">Dijes</div>
+          <div class="option-item" (click)="setCategoriaForm('Pulseras')">Pulseras</div>
+          <div class="option-item" (click)="setCategoriaForm('Aros')">Aros</div>
+          <div class="option-item" (click)="setCategoriaForm('Anillos')">Anillos</div>
+        </div>
+      </div>
 
-      <select
-        *ngIf="nuevoProducto.categoria === 'Cadenas'"
-        [(ngModel)]="nuevoProducto.medida"
-        style="padding: 8px; width: 120px; background-color: #e3f2fd"
-      >
-        <option value="">-- Medida --</option>
-        <option value="40 cm">40 cm</option>
-        <option value="45 cm">45 cm</option>
-        <option value="50 cm">50 cm</option>
-        <option value="55 cm">55 cm</option>
-        <option value="60 cm">60 cm</option>
-      </select>
+      <div class="custom-select" style="width: 120px" *ngIf="nuevoProducto.categoria === 'Cadenas'">
+        <div
+          class="select-header"
+          [class.abierto]="dropdownAbierto() === 'form-med'"
+          (click)="toggleDropdown('form-med', $event)"
+          style="background-color: var(--color-secundario)"
+        >
+          <span [class.option-placeholder]="!nuevoProducto.medida">{{
+            nuevoProducto.medida || 'Medida'
+          }}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#B87366"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [style.transform]="dropdownAbierto() === 'form-med' ? 'rotate(180deg)' : 'rotate(0)'"
+            style="transition: transform 0.2s"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+        <div class="select-options" *ngIf="dropdownAbierto() === 'form-med'">
+          <div class="option-item" (click)="setMedidaForm('')">------</div>
+          <div class="option-item" (click)="setMedidaForm('40 cm')">40 cm</div>
+          <div class="option-item" (click)="setMedidaForm('45 cm')">45 cm</div>
+          <div class="option-item" (click)="setMedidaForm('50 cm')">50 cm</div>
+          <div class="option-item" (click)="setMedidaForm('55 cm')">55 cm</div>
+          <div class="option-item" (click)="setMedidaForm('60 cm')">60 cm</div>
+        </div>
+      </div>
 
-      <select [(ngModel)]="nuevoProducto.material" style="padding: 8px; width: 150px">
-        <option value="">-- Material --</option>
-        <option value="Acero">Acero</option>
-        <option value="Plata">Plata</option>
-        <option value="Cristal">Cristal</option>
-        <option value="Otro">Otro</option>
-      </select>
+      <div class="custom-select" style="width: 150px">
+        <div
+          class="select-header"
+          [class.abierto]="dropdownAbierto() === 'form-mat'"
+          (click)="toggleDropdown('form-mat', $event)"
+        >
+          <span [class.option-placeholder]="!nuevoProducto.material">{{
+            nuevoProducto.material || 'Material'
+          }}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#B87366"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [style.transform]="dropdownAbierto() === 'form-mat' ? 'rotate(180deg)' : 'rotate(0)'"
+            style="transition: transform 0.2s"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+        <div class="select-options" *ngIf="dropdownAbierto() === 'form-mat'">
+          <div class="option-item" (click)="setMaterialForm('')">------</div>
+          <div class="option-item" (click)="setMaterialForm('Acero')">Acero</div>
+          <div class="option-item" (click)="setMaterialForm('Plata')">Plata</div>
+          <div class="option-item" (click)="setMaterialForm('Cristal')">Cristal</div>
+          <div class="option-item" (click)="setMaterialForm('Otro')">Otro</div>
+        </div>
+      </div>
 
       <input
         type="text"
         placeholder="Descripción de la joya"
         [(ngModel)]="nuevoProducto.nombre"
-        style="padding: 8px; flex-grow: 1; min-width: 200px"
+        class="input-form"
+        style="flex-grow: 1; min-width: 200px; height: 40px; box-sizing: border-box"
       />
     </div>
 
     <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center">
-      <!-- Le agregamos el texto fijo al lado del input -->
       <div style="display: flex; align-items: center; gap: 5px">
-        <span style="font-weight: bold; color: #495057">Precio $:</span>
+        <span style="font-weight: bold">Precio $:</span>
         <input
           type="number"
           [(ngModel)]="nuevoProducto.precio"
-          style="padding: 8px; width: 100px"
+          class="input-form"
+          style="width: 100px"
         />
       </div>
 
       <div style="display: flex; align-items: center; gap: 5px">
-        <span style="font-weight: bold; color: #495057">Stock Total:</span>
+        <span style="font-weight: bold">Stock Total:</span>
         <input
           type="number"
           [(ngModel)]="nuevoProducto.stock_real"
-          style="padding: 8px; width: 80px"
+          class="input-form"
+          style="width: 80px"
           min="0"
         />
       </div>
 
       <button
         (click)="guardarProducto()"
-        [style.background]="editandoId() ? '#ffc107' : '#28a745'"
-        style="
-          padding: 9px 15px;
-          color: black;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: bold;
-        "
+        [class]="editandoId() ? 'btn btn-editar' : 'btn btn-principal'"
       >
-        {{ editandoId() ? '💾 Actualizar' : '+ Guardar' }}
+        {{ editandoId() ? '💾 Actualizar' : '+ Guardar Joya' }}
       </button>
 
-      <button
-        *ngIf="editandoId()"
-        (click)="limpiarFormulario()"
-        style="
-          padding: 9px 15px;
-          background: #6c757d;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-        "
-      >
+      <button *ngIf="editandoId()" (click)="limpiarFormulario()" class="btn btn-secundario">
         Cancelar
       </button>
     </div>
   </div>
 
   <div
+    class="tarjeta"
     style="
-      background: #e9ecef;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      max-width: 900px;
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       align-items: center;
-      border: 1px solid #ccc;
+      background-color: #f1f3f5;
     "
   >
-    <strong style="color: #495057">🔍 Buscar:</strong>
-
+    <strong>🔍 Buscar:</strong>
     <input
       type="text"
       placeholder="Escribí código o descripción..."
       [ngModel]="filtroTexto()"
       (ngModelChange)="filtroTexto.set($event)"
-      style="
-        padding: 8px;
-        flex-grow: 1;
-        min-width: 200px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-      "
+      class="input-form"
+      style="flex-grow: 1; min-width: 200px; height: 40px; box-sizing: border-box"
     />
 
-    <select
-      [ngModel]="filtroCategoria()"
-      (ngModelChange)="filtroCategoria.set($event)"
-      style="padding: 8px; width: 150px; border: 1px solid #ced4da; border-radius: 4px"
-    >
-      <option value="">Todas las Categorías</option>
-      <option value="Collares">Collares</option>
-      <option value="Cadenas">Cadenas</option>
-      <option value="Dijes">Dijes</option>
-      <option value="Pulseras">Pulseras</option>
-      <option value="Aros">Aros</option>
-      <option value="Anillos">Anillos</option>
-    </select>
+    <div class="custom-select" style="width: 180px">
+      <div
+        class="select-header"
+        [class.abierto]="dropdownAbierto() === 'filtro-cat'"
+        (click)="toggleDropdown('filtro-cat', $event)"
+      >
+        <span>{{ filtroCategoria() || 'Todas las Categorías' }}</span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#B87366"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          [style.transform]="dropdownAbierto() === 'filtro-cat' ? 'rotate(180deg)' : 'rotate(0)'"
+          style="transition: transform 0.2s"
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+      <div class="select-options" *ngIf="dropdownAbierto() === 'filtro-cat'">
+        <div class="option-item option-placeholder" (click)="setCategoriaFiltro('')">
+          Todas las Categorías
+        </div>
+        <div class="option-item" (click)="setCategoriaFiltro('Collares')">Collares</div>
+        <div class="option-item" (click)="setCategoriaFiltro('Cadenas')">Cadenas</div>
+        <div class="option-item" (click)="setCategoriaFiltro('Dijes')">Dijes</div>
+        <div class="option-item" (click)="setCategoriaFiltro('Pulseras')">Pulseras</div>
+        <div class="option-item" (click)="setCategoriaFiltro('Aros')">Aros</div>
+        <div class="option-item" (click)="setCategoriaFiltro('Anillos')">Anillos</div>
+      </div>
+    </div>
 
-    <select
-      [ngModel]="filtroMaterial()"
-      (ngModelChange)="filtroMaterial.set($event)"
-      style="padding: 8px; width: 150px; border: 1px solid #ced4da; border-radius: 4px"
-    >
-      <option value="">Todos los Materiales</option>
-      <option value="Acero">Acero</option>
-      <option value="Plata">Plata</option>
-      <option value="Cristal">Cristal</option>
-      <option value="Otro">Otro</option>
-    </select>
+    <div class="custom-select" style="width: 160px">
+      <div
+        class="select-header"
+        [class.abierto]="dropdownAbierto() === 'filtro-mat'"
+        (click)="toggleDropdown('filtro-mat', $event)"
+      >
+        <span>{{ filtroMaterial() || 'Todos los Materiales' }}</span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#B87366"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          [style.transform]="dropdownAbierto() === 'filtro-mat' ? 'rotate(180deg)' : 'rotate(0)'"
+          style="transition: transform 0.2s"
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+      <div class="select-options" *ngIf="dropdownAbierto() === 'filtro-mat'">
+        <div class="option-item option-placeholder" (click)="setMaterialFiltro('')">
+          Todos los Materiales
+        </div>
+        <div class="option-item" (click)="setMaterialFiltro('Acero')">Acero</div>
+        <div class="option-item" (click)="setMaterialFiltro('Plata')">Plata</div>
+        <div class="option-item" (click)="setMaterialFiltro('Cristal')">Cristal</div>
+        <div class="option-item" (click)="setMaterialFiltro('Otro')">Otro</div>
+      </div>
+    </div>
   </div>
 
   <div
     *ngIf="productosSeleccionados().size > 0"
+    class="tarjeta"
     style="
-      background: #cce5ff;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      max-width: 900px;
+      background: var(--color-secundario);
+      border: 1px solid var(--color-principal);
       display: flex;
       gap: 10px;
       align-items: center;
-      border: 1px solid #b8daff;
     "
   >
-    <strong style="color: #004085"
+    <strong style="color: var(--color-texto)"
       >✅ Seleccionadas: {{ productosSeleccionados().size }} joyas</strong
     >
-
     <div style="flex-grow: 1"></div>
-    <span style="font-weight: bold; color: #004085">Aplicar aumento del:</span>
+    <span style="font-weight: bold">Aplicar aumento del:</span>
     <div style="display: flex; align-items: center; gap: 5px">
       <input
         type="number"
         min="1"
         [ngModel]="porcentajeAumento()"
         (ngModelChange)="porcentajeAumento.set($event)"
-        style="
-          padding: 8px;
-          width: 70px;
-          border: 1px solid #ced4da;
-          border-radius: 4px;
-          text-align: center;
-        "
+        class="input-form"
+        style="width: 70px; text-align: center"
+        placeholder="%"
       />
-      <span style="font-weight: bold; color: #004085; font-size: 18px">%</span>
+      <span style="font-weight: bold; font-size: 18px">%</span>
     </div>
-
-    <button
-      (click)="aplicarAumentoMasivo()"
-      style="
-        padding: 9px 15px;
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        margin-left: 10px;
-      "
-    >
+    <button (click)="aplicarAumentoMasivo()" class="btn btn-principal">
       🚀 Actualizar Precios
     </button>
   </div>
 
-  <table
-    border="1"
-    cellpadding="10"
-    style="
-      border-collapse: collapse;
-      width: 100%;
-      max-width: 900px;
-      text-align: left;
-      background: white;
-    "
-  >
-    <thead style="background-color: #343a40; color: white">
+  <table style="max-width: 900px">
+    <thead>
       <tr>
         <th style="width: 40px; text-align: center">
           <input
@@ -249,14 +290,17 @@
         <th>Código</th>
         <th>Categoría</th>
         <th>Material</th>
-        <th>Nombre</th>
+        <th>Descripción</th>
         <th>Precio</th>
         <th>Stock Disp.</th>
         <th>Acciones</th>
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let prod of productosFiltrados()">
+      <tr
+        *ngFor="let prod of productosFiltrados()"
+        style="border-bottom: 1px solid #eee; text-align: center"
+      >
         <td style="text-align: center">
           <input
             type="checkbox"
@@ -270,50 +314,31 @@
         </td>
         <td>
           {{ prod.categoria }}
-          <span *ngIf="prod.medida" style="font-weight: bold; color: #007bff; font-size: 0.9em">
+          <span
+            *ngIf="prod.medida"
+            style="font-weight: bold; color: var(--color-principal); font-size: 0.9em"
+          >
             ({{ prod.medida }})
           </span>
         </td>
         <td>{{ prod.material }}</td>
         <td>{{ prod.nombre }}</td>
         <td>$ {{ prod.precio }}</td>
-        <td style="color: #28a745; text-align: center">
+        <td style="color: #28a745; text-align: center; font-size: 1.1em">
           <strong>{{ prod.stock_disponible }}</strong>
         </td>
-        <td>
-          <button
-            (click)="editar(prod)"
-            style="
-              background: #ffc107;
-              border: none;
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-weight: bold;
-            "
-          >
-            Editar
+        <td style="display: flex; gap: 5px">
+          <button (click)="editar(prod)" class="btn btn-editar" style="padding: 6px 10px">
+            ✏️ Editar
           </button>
-          <button
-            (click)="eliminar(prod.id!)"
-            style="
-              background: #dc3545;
-              color: white;
-              border: none;
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-weight: bold;
-              margin-left: 5px;
-            "
-          >
-            Eliminar
+          <button (click)="eliminar(prod.id!)" class="btn btn-eliminar" style="padding: 6px 10px">
+            🗑️ Eliminar
           </button>
         </td>
       </tr>
       <tr *ngIf="productosFiltrados().length === 0">
-        <td colspan="7" style="text-align: center; padding: 20px">
-          No hay productos cargados en la base.
+        <td colspan="8" style="text-align: center; padding: 30px; color: #6c757d">
+          No hay productos cargados en la base con esos filtros.
         </td>
       </tr>
     </tbody>
