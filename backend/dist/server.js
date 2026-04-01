@@ -157,6 +157,75 @@ app.post("/api/productos", async (req, res) => {
         res.status(500).json({ error: "Error al crear el producto" });
     }
 });
+// 2.5 Crear productos masivamente (Importación CSV)
+app.post("/api/productos/masivo", async (req, res) => {
+    const { productos } = req.body;
+    if (!productos || !Array.isArray(productos) || productos.length === 0) {
+        return res
+            .status(400)
+            .json({ error: "No se recibieron productos válidos." });
+    }
+    try {
+        // Usamos una transacción para que guarde los 50 de golpe, es mucho más rápido
+        await db.run("BEGIN TRANSACTION");
+        let creados = 0;
+        for (const prod of productos) {
+            const categoria = prod.categoria || "";
+            const material = prod.material || "";
+            const medida = prod.medida || "";
+            const nombre = prod.nombre || "";
+            const precio = Number(prod.precio) || 0;
+            const stock = Number(prod.stock) || 0;
+            let prefijo = "OT";
+            if (categoria === "Cadenas")
+                prefijo = "CA";
+            else if (categoria === "Collares")
+                prefijo = "CO";
+            else if (categoria === "Dijes")
+                prefijo = "DI";
+            else if (categoria === "Pulseras")
+                prefijo = "PU";
+            else if (categoria === "Aros")
+                prefijo = "AR";
+            else if (categoria === "Anillos")
+                prefijo = "AN";
+            // Buscamos el último código de esa categoría para seguir la cuenta
+            const row = await db.get(`SELECT codigo FROM Productos WHERE codigo LIKE ? ORDER BY CAST(SUBSTR(codigo, 3) AS INTEGER) DESC LIMIT 1`, [`${prefijo}%`]);
+            let nuevoNumero = 1;
+            if (row && row.codigo) {
+                const numeroAnterior = parseInt(row.codigo.substring(2));
+                if (!isNaN(numeroAnterior))
+                    nuevoNumero = numeroAnterior + 1;
+            }
+            const numeroFormateado = nuevoNumero.toString().padStart(2, "0");
+            const codigoGenerado = `${prefijo}${numeroFormateado}`;
+            // Insertamos la joya
+            await db.run(`INSERT INTO Productos (codigo, categoria, material, medida, nombre, precio, stock_real, stock_disponible) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+                codigoGenerado,
+                categoria,
+                material,
+                medida,
+                nombre,
+                precio,
+                stock,
+                stock,
+            ]);
+            creados++;
+        }
+        await db.run("COMMIT");
+        res.json({
+            mensaje: `Se importaron ${creados} joyas exitosamente al inventario.`,
+        });
+    }
+    catch (error) {
+        await db.run("ROLLBACK"); // Si algo falla, deshacemos todo para no romper la base
+        console.error(error);
+        res
+            .status(500)
+            .json({ error: "Error al importar los productos masivamente." });
+    }
+});
 // 3. Aumento masivo de precios por porcentaje
 app.put("/api/productos/aumento-masivo", async (req, res) => {
     const { ids, porcentaje } = req.body;

@@ -41,4 +41,8 @@ export class ProductoService {
   aumentoMasivo(ids: number[], porcentaje: number): Observable<any> {
     return this.http.put(`${this.apiUrl}/aumento-masivo`, { ids, porcentaje });
   }
+
+  crearProductosMasivo(productos: any[]) {
+    return this.http.post(`${this.apiUrl}/masivo`, { productos });
+  }
 }

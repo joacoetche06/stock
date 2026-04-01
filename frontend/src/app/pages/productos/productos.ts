@@ -214,6 +214,85 @@ export class ProductosComponent {
       });
     }
   }
+
+  // --- IMPORTACIÓN POR CSV (Voz / IA) ---
+  importarCSV(event: any) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const texto = e.target?.result as string;
+      this.procesarCSV(texto);
+    };
+    reader.readAsText(file);
+
+    // Reseteamos el input por si quiere subir el mismo archivo dos veces
+    event.target.value = '';
+  }
+
+  procesarCSV(texto: string) {
+    // A veces Excel/IA usa coma, a veces punto y coma. Detectamos cuál usó.
+    const separador = texto.includes(';') ? ';' : ',';
+    const lineas = texto.split('\n').filter((linea) => linea.trim() !== '');
+
+    const productosNuevos = [];
+
+    // Empezamos en i = 1 para saltarnos la fila de los títulos (Categoria, Material, etc)
+    for (let i = 1; i < lineas.length; i++) {
+      // Quitamos posibles comillas que agregue la IA o saltos de línea raros
+      const columnas = lineas[i].split(separador).map((c) => c.trim().replace(/^"|"$/g, ''));
+
+      // Esperamos 6 columnas: Categoria, Material, Medida, Descripcion, Precio, Stock
+      if (columnas.length >= 5) {
+        // NORMALIZACIÓN INTELIGENTE (Corrige si la IA lo escribe en singular o minúscula)
+        let catFormateada =
+          columnas[0].charAt(0).toUpperCase() + columnas[0].slice(1).toLowerCase();
+        if (catFormateada === 'Cadena') catFormateada = 'Cadenas';
+        if (catFormateada === 'Collar') catFormateada = 'Collares';
+        if (catFormateada === 'Dije') catFormateada = 'Dijes';
+        if (catFormateada === 'Pulsera') catFormateada = 'Pulseras';
+        if (catFormateada === 'Aro') catFormateada = 'Aros';
+        if (catFormateada === 'Anillo') catFormateada = 'Anillos';
+
+        let matFormateado =
+          columnas[1].charAt(0).toUpperCase() + columnas[1].slice(1).toLowerCase();
+
+        productosNuevos.push({
+          categoria: catFormateada,
+          material: matFormateado,
+          medida: columnas[2] === '-' || columnas[2].toLowerCase() === 'no' ? '' : columnas[2],
+          nombre: columnas[3],
+          precio: Number(columnas[4]),
+          stock: Number(columnas[5] || 1),
+        });
+      }
+    }
+
+    if (productosNuevos.length === 0) {
+      return Swal.fire('Error', 'El archivo está vacío o no tiene el formato correcto.', 'error');
+    }
+
+    Swal.fire({
+      title: 'Importando joyas...',
+      text: `Procesando y generando códigos para ${productosNuevos.length} joyas.`,
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    this.productoService.crearProductosMasivo(productosNuevos).subscribe({
+      next: (res: any) => {
+        Swal.fire('Elementos agregados!', res.mensaje, 'success');
+        this.cargarProductos();
+      },
+      error: (err) => {
+        console.error(err);
+        Swal.fire('Error', 'Hubo un problema al cargar el archivo en la base de datos.', 'error');
+      },
+    });
+
+    return;
+  }
   // --- NUEVO: Selección y Aumento Masivo ---
   productosSeleccionados = signal<Set<number>>(new Set());
   porcentajeAumento = signal<number | null>(null);

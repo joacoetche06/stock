@@ -1,8 +1,33 @@
 <div>
   <div [class]="editandoId() ? 'tarjeta tarjeta-edicion' : 'tarjeta'">
-    <h3 style="margin-top: 0; color: var(--color-principal)">
-      {{ editandoId() ? '✏️ Editando Producto' : '+ Ingresar Nuevo Producto' }}
-    </h3>
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      "
+    >
+      <h3 style="margin-top: 0; margin-bottom: 0; color: var(--color-principal)">
+        {{ editandoId() ? '✏️ Editando Producto' : '+ Ingresar Nuevo Producto' }}
+      </h3>
+
+      <input
+        type="file"
+        #fileInput
+        accept=".csv"
+        style="display: none"
+        (change)="importarCSV($event)"
+      />
+      <button
+        *ngIf="!editandoId()"
+        (click)="fileInput.click()"
+        class="btn btn-secundario"
+        style="background-color: var(--color-texto); font-size: 13px"
+      >
+        🎙️ Importar CSV (por voz)
+      </button>
+    </div>
 
     <div
       style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px"
