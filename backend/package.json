@@ -15,15 +15,10 @@
     "directories": {
       "output": "instalador-final"
     },
-    "files": [
-      "dist/**/*",
-      "public/**/*",
-      "main.js",
-      "package.json"
-    ],
+    "files": ["dist/**/*", "public/**/*", "main.js", "package.json"],
     "win": {
       "target": "nsis",
-      "icon": "public/logo.ico"
+      "icon": "public/frontend/browser/logo.ico"
     },
     "nsis": {
       "oneClick": false,

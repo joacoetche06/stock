@@ -8,7 +8,7 @@ function createWindow() {
     width: 1300,
     height: 850,
     autoHideMenuBar: true, // Oculta los menús de "Archivo, Edición" típicos del navegador
-    icon: path.join(__dirname, "public", "logo.ico"), // Para que tenga el diamante de ícono
+    icon: path.join(__dirname, "public", "frontend", "browser", "logo.ico"),
   });
 
   // 2. Le decimos a la ventana que cargue tu sistema directamente
