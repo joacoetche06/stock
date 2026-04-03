@@ -2,7 +2,7 @@ directories:
   output: instalador-final
   buildResources: build
 appId: com.joyeriaadri.stock
-productName: CHICAS Stock
+productName: Chicas de Buenos Aires
 files:
   - filter:
       - dist/**/*
@@ -16,5 +16,5 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  shortcutName: CHICAS Stock
+  shortcutName: Chicas de Buenos Aires
 electronVersion: 41.1.1

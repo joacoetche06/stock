@@ -11,11 +11,16 @@
   },
   "build": {
     "appId": "com.joyeriaadri.stock",
-    "productName": "CHICAS Stock",
+    "productName": "Chicas de Buenos Aires",
     "directories": {
       "output": "instalador-final"
     },
-    "files": ["dist/**/*", "public/**/*", "main.js", "package.json"],
+    "files": [
+      "dist/**/*",
+      "public/**/*",
+      "main.js",
+      "package.json"
+    ],
     "win": {
       "target": "nsis",
       "icon": "public/frontend/browser/logo.ico"
@@ -24,7 +29,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "CHICAS Stock"
+      "shortcutName": "Chicas de Buenos Aires"
     }
   },
   "dependencies": {
