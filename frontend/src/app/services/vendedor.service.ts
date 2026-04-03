@@ -13,7 +13,7 @@ export interface Vendedor {
   providedIn: 'root',
 })
 export class VendedorService {
-  private apiUrl = 'http://localhost:3001/api/vendedores';
+  private apiUrl = 'http://127.0.0.1:3001/api/vendedores';
 
   constructor(private http: HttpClient) {}
 

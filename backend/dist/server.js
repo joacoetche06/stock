@@ -16,12 +16,14 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // Variable global para la base de datos
 let db;
-// Inicializar la Base de Datos SQLite
+// Buscamos la ruta segura que nos pasó Electron (o usamos la carpeta actual si estamos programando)
+const rutaSegura = process.env.USER_DATA_PATH || __dirname;
+const dbPath = path_1.default.join(rutaSegura, "app-adri.sqlite");
 // Inicializar la Base de Datos SQLite
 async function inicializarDB() {
     try {
         db = await (0, sqlite_1.open)({
-            filename: "./app-adri.sqlite",
+            filename: dbPath, // <-- ACÁ CAMBIAMOS "./app-adri.sqlite" POR dbPath
             driver: sqlite3_1.default.Database,
         });
         console.log("✅ Base de datos SQLite conectada.");
@@ -486,6 +488,6 @@ app.use(express_1.default.static(path_1.default.join(__dirname, "..", "public", 
 app.get(/.*/, (req, res) => {
     res.sendFile(path_1.default.join(__dirname, "..", "public", "frontend", "browser", "index.html"));
 });
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+app.listen(PORT, "127.0.0.1", () => {
+    console.log(`🚀 Servidor corriendo en http://127.0.0.1:${PORT}`);
 });
