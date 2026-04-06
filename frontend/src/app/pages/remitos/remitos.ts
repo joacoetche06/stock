@@ -31,6 +31,15 @@ export class RemitosComponent {
   cantidadSeleccionada = signal<number>(1);
   itemsCarrito = signal<any[]>([]);
 
+  // ==========================================
+  // VARIABLES PARA LA LIQUIDACIÓN Y CIERRE
+  // ==========================================
+  remitoLiquidacion = signal<any | null>(null);
+  itemsLiquidacion = signal<any[]>([]);
+  comisionPorcentaje: number = 25; // Porcentaje por defecto (Adri lo puede cambiar)
+  totalNeto = signal<number>(0);
+  ticketImpresion = signal<any | null>(null);
+
   // --- CONTROL DE MENÚS DESPLEGABLES CUSTOM ---
   dropdownAbierto = signal<string>('');
 
@@ -306,5 +315,122 @@ export class RemitosComponent {
 
   imprimirRemito() {
     window.print();
+  }
+
+  // ==========================================
+  // FUNCIONES DE LIQUIDACIÓN
+  // ==========================================
+  
+  // 1. Abre la ventanita cuando hacemos clic en "Cerrar Remito"
+  abrirModalLiquidacion(remito: any) {
+    this.remitoLiquidacion.set(remito);
+    
+    // Le pedimos al backend los items reales de ESTE remito
+    this.remitoService.getRemitoItems(remito.id).subscribe({
+      next: (itemsBackend) => {
+        // Clonamos los ítems que llegaron de la base de datos
+        const itemsClonados = itemsBackend.map((item: any) => ({
+          ...item,
+          cantidad_entregada: item.cantidad_entregada || item.cantidad,
+          cantidad_vendida: 0,
+          cantidad_devuelta: item.cantidad_entregada || item.cantidad 
+        }));
+        
+        this.itemsLiquidacion.set(itemsClonados);
+        this.comisionPorcentaje = 25; 
+        this.calcularTotalNeto();
+      },
+      error: () => Swal.fire('Error', 'No se pudieron cargar los productos de este remito.', 'error')
+    });
+  }
+
+  cerrarModalLiquidacion() {
+    this.remitoLiquidacion.set(null);
+    this.itemsLiquidacion.set([]);
+  }
+
+  // 2. Hace la magia: Si cambia lo vendido, ajusta lo devuelto (y viceversa)
+  actualizarCantidades(index: number, tipo: 'vendida' | 'devuelta') {
+    const items = this.itemsLiquidacion();
+    const item = items[index];
+    const totalEntregado = item.cantidad_entregada;
+
+    // Evitamos números locos
+    if (!item.cantidad_vendida || item.cantidad_vendida < 0) item.cantidad_vendida = 0;
+    if (!item.cantidad_devuelta || item.cantidad_devuelta < 0) item.cantidad_devuelta = 0;
+
+    if (tipo === 'vendida') {
+      if (item.cantidad_vendida > totalEntregado) item.cantidad_vendida = totalEntregado;
+      item.cantidad_devuelta = totalEntregado - item.cantidad_vendida;
+    } else {
+      if (item.cantidad_devuelta > totalEntregado) item.cantidad_devuelta = totalEntregado;
+      item.cantidad_vendida = totalEntregado - item.cantidad_devuelta;
+    }
+    
+    this.calcularTotalNeto();
+  }
+
+  // 3. Calcula cuánta plata le queda a Adri sacando la comisión
+  calcularTotalNeto() {
+    const items = this.itemsLiquidacion();
+    let suma = 0;
+    
+    items.forEach(item => {
+      if (item.cantidad_vendida > 0) {
+        // Le restamos el porcentaje al precio original
+        const descuento = item.precio * (this.comisionPorcentaje / 100);
+        const precioConComision = item.precio - descuento;
+        
+        suma += (precioConComision * item.cantidad_vendida);
+      }
+    });
+    
+    this.totalNeto.set(suma);
+  }
+
+  // 4. Confirma el cierre, avisa al backend e imprime el ticket
+  confirmarCierreYTicket() {
+    const remito = this.remitoLiquidacion();
+    if (!remito) return;
+
+    // Le mandamos al backend los items con las cantidades EXACTAS que se vendieron y devolvieron
+    const datosCierre = {
+      items: this.itemsLiquidacion() 
+    };
+
+    Swal.fire({
+      title: 'Cerrando Remito...',
+      text: 'Actualizando stock e imprimiendo ticket.',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    this.remitoService.cerrarRemito(remito.id, datosCierre).subscribe({
+      next: () => {
+        Swal.close();
+        
+        // Armamos el "Ticket" virtual con los datos finales
+        this.ticketImpresion.set({
+          vendedor: remito.vendedor,
+          fecha: new Date(),
+          comision: this.comisionPorcentaje,
+          items: this.itemsLiquidacion(),
+          totalNeto: this.totalNeto()
+        });
+
+        this.cerrarModalLiquidacion();
+
+        // Le damos un microsegundo a Angular para que dibuje el ticket en pantalla y disparamos la impresora
+        setTimeout(() => {
+          window.print();
+          this.ticketImpresion.set(null); 
+          
+          // --- ESTAS SON LAS DOS LÍNEAS CORREGIDAS ---
+          this.cargarHistorialRemitos(); 
+          this.cargarDatosBase(); // Agregamos esto para que se refresque el stock de productos
+        }, 300);
+      },
+      error: () => Swal.fire('Error', 'Hubo un problema al liquidar el remito.', 'error')
+    });
   }
 }

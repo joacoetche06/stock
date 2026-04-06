@@ -22,7 +22,7 @@
     background: white !important;
   }
 
-  /* 3. Ocultamos la app y mostramos solo el remito */
+  /* 3. Ocultamos la app y mostramos solo el remito o el ticket */
   nav {
     display: none !important;
   }
@@ -30,20 +30,24 @@
     visibility: hidden;
   }
 
+  /* Hacemos visibles AMBOS tipos de tickets cuando toque imprimirlos */
   #zona-impresion,
-  #zona-impresion * {
+  #zona-impresion *,
+  #ticket-liquidacion,
+  #ticket-liquidacion * {
     visibility: visible;
   }
 
-  #zona-impresion {
+  /* Posicionamos cualquiera de los dos arriba de todo */
+  #zona-impresion, 
+  #ticket-liquidacion {
     position: absolute;
     left: 0;
     top: 0;
     width: 100% !important;
-    padding: 1cm !important; /* Espacio interno elegante para que no se pegue a los bordes */
+    padding: 1cm !important;
     box-sizing: border-box;
   }
-
   /* 4. TABLA INTELIGENTE: Letra grande y sin cortar palabras */
   #zona-impresion table {
     table-layout: auto !important; /* Permite que las columnas se ensanchen según el texto */
