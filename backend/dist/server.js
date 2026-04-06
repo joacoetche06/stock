@@ -17,7 +17,9 @@ app.use(express_1.default.json());
 // Variable global para la base de datos
 let db;
 // Buscamos la ruta segura que nos pasó Electron (o usamos la carpeta actual si estamos programando)
-const rutaSegura = process.env.USER_DATA_PATH || __dirname;
+// Buscamos la ruta segura de Windows. Si no existe (porque estamos en Linux),
+// subimos un nivel ("..") para salir de la carpeta 'src' o 'dist' y apuntar a la raíz del backend.
+const rutaSegura = process.env.USER_DATA_PATH || path_1.default.join(__dirname, "..");
 const dbPath = path_1.default.join(rutaSegura, "app-adri.sqlite");
 // Inicializar la Base de Datos SQLite
 async function inicializarDB() {
@@ -73,6 +75,11 @@ async function inicializarDB() {
         catch (e) {
             // Si la columna ya existe, SQLite tira un error inofensivo y cae acá silenciosamente
         }
+        try {
+            await db.exec(`ALTER TABLE Remitos ADD COLUMN comision REAL DEFAULT 0;`);
+            console.log("Columna 'comision' agregada a la base de datos.");
+        }
+        catch (e) { }
         console.log("📦 Tablas sincronizadas correctamente.");
     }
     catch (error) {
@@ -388,7 +395,7 @@ app.post("/api/remitos", async (req, res) => {
 app.get("/api/remitos", async (req, res) => {
     try {
         const remitos = await db.all(`
-            SELECT r.id, r.fecha_salida, r.estado, v.nombre as vendedor 
+            SELECT r.id, r.fecha_salida, r.estado, r.comision, v.nombre as vendedor 
             FROM Remitos r
             JOIN Vendedores v ON r.vendedor_id = v.id
         `);
@@ -419,14 +426,12 @@ app.get("/api/remitos/:id/items", async (req, res) => {
 // Cerrar un remito (Regreso de mercadería)
 app.put("/api/remitos/:id/cerrar", async (req, res) => {
     const remitoId = req.params.id;
-    const { items } = req.body;
-    // items: [{ producto_id: 1, cantidad_devuelta: 2, cantidad_vendida: 1 }]
+    // ACÁ AGREGAMOS LA COMISIÓN
+    const { items, comision } = req.body;
     try {
         await db.run("BEGIN TRANSACTION");
-        // 1. Marcar el remito como Cerrado
-        await db.run(`UPDATE Remitos SET estado = 'Cerrado' WHERE id = ?`, [
-            remitoId,
-        ]);
+        // ACÁ ACTUALIZAMOS LA CONSULTA PARA QUE LA GUARDE
+        await db.run(`UPDATE Remitos SET estado = 'Cerrado', comision = ? WHERE id = ?`, [comision || 0, remitoId]);
         // 2. Procesar cada producto que vuelve
         for (const item of items) {
             // Actualizar el detalle del remito

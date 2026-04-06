@@ -110,8 +110,8 @@ export class RemitosComponent {
   });
 
   // --- VARIABLES PARA EL CIERRE DE REMITO ---
-  remitoEnCierre = signal<any>(null);
-  itemsEnCierre = signal<any[]>([]);
+  // remitoEnCierre = signal<any>(null);
+  // itemsEnCierre = signal<any[]>([]);
 
   constructor(
     private remitoService: RemitoService,
@@ -210,7 +210,7 @@ export class RemitosComponent {
 
         this.vendedorSeleccionado.set('');
         this.itemsCarrito.set([]);
-        this.cancelarCierre();
+        // this.cancelarCierre();
         this.cerrarDetalle();
         this.remitosHistorial.set([]);
         this.cargarHistorialRemitos();
@@ -223,87 +223,111 @@ export class RemitosComponent {
   }
 
   // --- FUNCIONES PARA CERRAR REMITO ---
-  abrirPanelCierre(remito: any) {
-    this.remitoEnCierre.set(remito);
-    this.remitoService.getRemitoItems(remito.id).subscribe({
-      next: (items) => {
-        const itemsPreparados = items.map((i) => ({
-          ...i,
-          cantidad_vendida: 0,
-          cantidad_devuelta: 0,
-        }));
-        this.itemsEnCierre.set(itemsPreparados);
-      },
-      error: () => Swal.fire('Error', 'No se pudieron cargar los items del remito.', 'error'),
-    });
-  }
+  // abrirPanelCierre(remito: any) {
+  //   this.remitoEnCierre.set(remito);
+  //   this.remitoService.getRemitoItems(remito.id).subscribe({
+  //     next: (items) => {
+  //       const itemsPreparados = items.map((i) => ({
+  //         ...i,
+  //         cantidad_vendida: 0,
+  //         cantidad_devuelta: 0,
+  //       }));
+  //       this.itemsEnCierre.set(itemsPreparados);
+  //     },
+  //     error: () => Swal.fire('Error', 'No se pudieron cargar los items del remito.', 'error'),
+  //   });
+  // }
 
-  cancelarCierre() {
-    this.remitoEnCierre.set(null);
-    this.itemsEnCierre.set([]);
-  }
+  // cancelarCierre() {
+  //   this.remitoEnCierre.set(null);
+  //   this.itemsEnCierre.set([]);
+  // }
 
-  confirmarCierre() {
-    const items = this.itemsEnCierre();
-    for (let item of items) {
-      const total = item.cantidad_vendida + item.cantidad_devuelta;
-      if (total !== item.cantidad_entregada) {
-        return Swal.fire(
-          'Error de cálculos',
-          `Error en ${item.nombre}: Llevó ${item.cantidad_entregada}, pero anotaste ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos. La suma no coincide.`,
-          'error',
-        );
-      }
-    }
+  // confirmarCierre() {
+  //   const items = this.itemsEnCierre();
+  //   for (let item of items) {
+  //     const total = item.cantidad_vendida + item.cantidad_devuelta;
+  //     if (total !== item.cantidad_entregada) {
+  //       return Swal.fire(
+  //         'Error de cálculos',
+  //         `Error en ${item.nombre}: Llevó ${item.cantidad_entregada}, pero anotaste ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos. La suma no coincide.`,
+  //         'error',
+  //       );
+  //     }
+  //   }
 
-    const payload = {
-      items: items.map((i) => ({
-        producto_id: i.producto_id,
-        cantidad_vendida: i.cantidad_vendida,
-        cantidad_devuelta: i.cantidad_devuelta,
-      })),
-    };
+  //   const payload = {
+  //     items: items.map((i) => ({
+  //       producto_id: i.producto_id,
+  //       cantidad_vendida: i.cantidad_vendida,
+  //       cantidad_devuelta: i.cantidad_devuelta,
+  //     })),
+  //   };
 
-    this.remitoService.cerrarRemito(this.remitoEnCierre().id, payload).subscribe({
-      next: () => {
-        Swal.fire({
-          icon: 'success',
-          title: '¡Remito Cerrado!',
-          text: 'El stock y las ventas se actualizaron correctamente.',
-          confirmButtonColor: '#B87366',
-        });
+  //   this.remitoService.cerrarRemito(this.remitoEnCierre().id, payload).subscribe({
+  //     next: () => {
+  //       Swal.fire({
+  //         icon: 'success',
+  //         title: '¡Remito Cerrado!',
+  //         text: 'El stock y las ventas se actualizaron correctamente.',
+  //         confirmButtonColor: '#B87366',
+  //       });
 
-        this.cancelarCierre();
-        this.cerrarDetalle();
-        this.remitosHistorial.set([]);
-        this.cargarHistorialRemitos();
-        this.cargarDatosBase();
-      },
-      error: () => Swal.fire('Error', 'No se pudo cerrar el remito.', 'error'),
-    });
+  //       this.cancelarCierre();
+  //       this.cerrarDetalle();
+  //       this.remitosHistorial.set([]);
+  //       this.cargarHistorialRemitos();
+  //       this.cargarDatosBase();
+  //     },
+  //     error: () => Swal.fire('Error', 'No se pudo cerrar el remito.', 'error'),
+  //   });
 
-    return;
-  }
+  //   return;
+  // }
 
   // --- FUNCIONES PARA VER EL DETALLE E IMPRIMIR ---
   remitoEnDetalle = signal<any>(null);
   itemsEnDetalle = signal<any[]>([]);
   itemsAgrupados = signal<{ [key: string]: any[] }>({});
 
+  modoImpresion = signal<'remito' | 'ticket' | ''>('');
+
   abrirDetalle(remito: any) {
     this.remitoEnDetalle.set(remito);
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (items) => {
         this.itemsEnDetalle.set(items);
-        const agrupados = items.reduce((acc, item) => {
+        // Agrupamos por categoría (tu código original)
+        const agrupados = items.reduce((acc: any, item: any) => {
           const cat = item.categoria || 'Sin Categoría';
           if (!acc[cat]) acc[cat] = [];
           acc[cat].push(item);
           return acc;
         }, {});
         this.itemsAgrupados.set(agrupados);
+
+        // --- NUEVO: PREPARAMOS EL TICKET INVISIBLE SOLO SI ESTÁ CERRADO ---
+        if (remito.estado === 'Cerrado') {
+          let suma = 0;
+          items.forEach((item: any) => {
+            if (item.cantidad_vendida > 0) {
+              const descuento = item.precio * ((remito.comision || 0) / 100);
+              suma += (item.precio - descuento) * item.cantidad_vendida;
+            }
+          });
+
+          this.ticketImpresion.set({
+            vendedor: remito.vendedor,
+            fecha: new Date(), // Pone la fecha del momento de impresión
+            comision: remito.comision || 0,
+            items: items,
+            totalNeto: suma,
+          });
+        } else {
+          this.ticketImpresion.set(null); // Si está pendiente, no hay ticket de liquidación
+        }
       },
-      error: () => Swal.fire('Error', 'No se pudieron cargar los detalles del remito.', 'error'),
+      error: () => Swal.fire('Error', 'No se pudieron cargar los detalles.', 'error'),
     });
   }
 
@@ -313,18 +337,22 @@ export class RemitosComponent {
     this.itemsAgrupados.set({});
   }
 
-  imprimirRemito() {
-    window.print();
+  imprimirDocumento(tipo: 'remito' | 'ticket') {
+    this.modoImpresion.set(tipo);
+    setTimeout(() => {
+      window.print();
+      this.modoImpresion.set(''); // Apagamos el semáforo al terminar
+    }, 100);
   }
 
   // ==========================================
   // FUNCIONES DE LIQUIDACIÓN
   // ==========================================
-  
+
   // 1. Abre la ventanita cuando hacemos clic en "Cerrar Remito"
   abrirModalLiquidacion(remito: any) {
     this.remitoLiquidacion.set(remito);
-    
+
     // Le pedimos al backend los items reales de ESTE remito
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (itemsBackend) => {
@@ -333,14 +361,15 @@ export class RemitosComponent {
           ...item,
           cantidad_entregada: item.cantidad_entregada || item.cantidad,
           cantidad_vendida: 0,
-          cantidad_devuelta: item.cantidad_entregada || item.cantidad 
+          cantidad_devuelta: item.cantidad_entregada || item.cantidad,
         }));
-        
+
         this.itemsLiquidacion.set(itemsClonados);
-        this.comisionPorcentaje = 25; 
+        this.comisionPorcentaje = 25;
         this.calcularTotalNeto();
       },
-      error: () => Swal.fire('Error', 'No se pudieron cargar los productos de este remito.', 'error')
+      error: () =>
+        Swal.fire('Error', 'No se pudieron cargar los productos de este remito.', 'error'),
     });
   }
 
@@ -366,7 +395,7 @@ export class RemitosComponent {
       if (item.cantidad_devuelta > totalEntregado) item.cantidad_devuelta = totalEntregado;
       item.cantidad_vendida = totalEntregado - item.cantidad_devuelta;
     }
-    
+
     this.calcularTotalNeto();
   }
 
@@ -374,17 +403,17 @@ export class RemitosComponent {
   calcularTotalNeto() {
     const items = this.itemsLiquidacion();
     let suma = 0;
-    
-    items.forEach(item => {
+
+    items.forEach((item) => {
       if (item.cantidad_vendida > 0) {
         // Le restamos el porcentaje al precio original
         const descuento = item.precio * (this.comisionPorcentaje / 100);
         const precioConComision = item.precio - descuento;
-        
-        suma += (precioConComision * item.cantidad_vendida);
+
+        suma += precioConComision * item.cantidad_vendida;
       }
     });
-    
+
     this.totalNeto.set(suma);
   }
 
@@ -393,44 +422,29 @@ export class RemitosComponent {
     const remito = this.remitoLiquidacion();
     if (!remito) return;
 
-    // Le mandamos al backend los items con las cantidades EXACTAS que se vendieron y devolvieron
     const datosCierre = {
-      items: this.itemsLiquidacion() 
+      items: this.itemsLiquidacion(),
+      comision: this.comisionPorcentaje, // Le mandamos la comisión a la base
     };
 
     Swal.fire({
-      title: 'Cerrando Remito...',
-      text: 'Actualizando stock e imprimiendo ticket.',
+      title: 'Liquidando...',
       allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+      didOpen: () => Swal.showLoading(),
     });
 
     this.remitoService.cerrarRemito(remito.id, datosCierre).subscribe({
       next: () => {
-        Swal.close();
-        
-        // Armamos el "Ticket" virtual con los datos finales
-        this.ticketImpresion.set({
-          vendedor: remito.vendedor,
-          fecha: new Date(),
-          comision: this.comisionPorcentaje,
-          items: this.itemsLiquidacion(),
-          totalNeto: this.totalNeto()
-        });
-
+        Swal.fire(
+          '¡Liquidación Guardada!',
+          'Ahora podés imprimir el ticket desde el botón "Ver" en el historial.',
+          'success',
+        );
         this.cerrarModalLiquidacion();
-
-        // Le damos un microsegundo a Angular para que dibuje el ticket en pantalla y disparamos la impresora
-        setTimeout(() => {
-          window.print();
-          this.ticketImpresion.set(null); 
-          
-          // --- ESTAS SON LAS DOS LÍNEAS CORREGIDAS ---
-          this.cargarHistorialRemitos(); 
-          this.cargarDatosBase(); // Agregamos esto para que se refresque el stock de productos
-        }, 300);
+        this.cargarHistorialRemitos();
+        this.cargarDatosBase();
       },
-      error: () => Swal.fire('Error', 'Hubo un problema al liquidar el remito.', 'error')
+      error: () => Swal.fire('Error', 'Hubo un problema al liquidar.', 'error'),
     });
   }
 }
