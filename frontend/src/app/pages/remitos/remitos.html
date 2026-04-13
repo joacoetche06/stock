@@ -51,74 +51,87 @@
       </div>
     </div>
 
-    <div style="margin-bottom: 15px">
+    <div style="margin-bottom: 25px">
       <label style="font-weight: bold; display: block; margin-bottom: 5px"
-        >2. Buscar y Agregar Joyas:</label
+        >2. Buscar y Seleccionar Joyas:</label
       >
 
-      <div style="display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap">
-        <div style="position: relative; flex-grow: 1; min-width: 280px">
-          <input
-            type="text"
-            placeholder="🔍 Buscar joya (código, nombre, material)..."
-            [ngModel]="terminoBusqueda()"
-            (ngModelChange)="buscarJoya($event)"
-            (focus)="mostrarDropdown.set(true)"
-            (blur)="ocultarDropdown()"
-            class="input-form"
-            style="width: 100%; box-sizing: border-box; height: auto"
-            autocomplete="off"
-          />
-
+      <div
+        style="position: relative; width: 100%; max-width: 500px"
+        (click)="$event.stopPropagation()"
+      >
+        <input
+          type="text"
+          placeholder="🔍 Buscar joya (código, nombre, material)..."
+          [ngModel]="terminoBusqueda()"
+          (ngModelChange)="buscarJoya($event)"
+          (focus)="mostrarDropdown.set(true)"
+          class="input-form"
+          style="width: 100%; box-sizing: border-box; font-size: 1.1em"
+          autocomplete="off"
+        />
+        <div
+          *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
+          class="select-options"
+          style="top: 100%; max-height: 350px; overflow-y: auto"
+        >
           <div
-            *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
-            class="select-options"
-            style="top: 100%"
+            *ngFor="let p of productosDisponibles()"
+            class="option-item"
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 1px solid #f8f9fa;
+              padding: 10px 15px;
+            "
           >
-            <div
-              *ngFor="let p of productosDisponibles()"
-              (mousedown)="seleccionarProducto(p)"
-              class="option-item"
+            <label
               style="
                 display: flex;
-                justify-content: space-between;
-                border-bottom: 1px solid #f8f9fa;
+                align-items: center;
+                gap: 12px;
+                cursor: pointer;
+                width: 100%;
+                margin: 0;
               "
             >
-              <span>
+              <input
+                type="checkbox"
+                [checked]="estaEnCarrito(p.id!)"
+                (change)="toggleProductoCarrito(p, $event)"
+                style="
+                  width: 20px;
+                  height: 20px;
+                  cursor: pointer;
+                  accent-color: var(--color-principal);
+                "
+              />
+              <span style="font-size: 1.05em">
                 <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
                 <span
                   *ngIf="p.material"
                   style="color: #6c757d; font-size: 0.9em; font-style: italic"
                 >
                   ({{ p.material }})
-                  <span
-                    *ngIf="p.medida"
-                    style="font-weight: bold; color: var(--color-principal); font-size: 0.9em"
+                  <span *ngIf="p.medida" style="font-weight: bold; color: var(--color-principal)"
                     >({{ p.medida }})</span
                   >
                 </span>
               </span>
-              <span style="color: #28a745; font-size: 0.85em; font-weight: bold"
-                >Disp: {{ p.stock_disponible }}</span
-              >
-            </div>
+            </label>
+            <span
+              style="
+                color: #28a745;
+                font-size: 0.9em;
+                font-weight: bold;
+                white-space: nowrap;
+                margin-left: 10px;
+              "
+              >Disp: {{ p.stock_disponible }}</span
+            >
           </div>
         </div>
-
-        <input
-          type="number"
-          min="1"
-          [ngModel]="cantidadSeleccionada()"
-          (ngModelChange)="cantidadSeleccionada.set($event)"
-          class="input-form"
-          style="width: 60px; height: auto; text-align: center"
-          placeholder="Cant"
-        />
-
-        <button (click)="agregarAlRemito()" class="btn btn-principal" style="height: auto">
-          Añadir a lista ↓
-        </button>
       </div>
     </div>
 
@@ -882,8 +895,8 @@
 
 <div
   id="ticket-liquidacion"
-  class="solo-impresion"
   *ngIf="ticketImpresion() && modoImpresion() === 'ticket'"
+  style="background: white; padding: 30px; font-family: Arial, sans-serif; color: black"
 >
   <div style="text-align: center; margin-bottom: 20px">
     <img src="logo.png" alt="Logo" style="height: 140px; width: auto; border-radius: 8px" />

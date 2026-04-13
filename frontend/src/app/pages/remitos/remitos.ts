@@ -5,6 +5,8 @@ import { RemitoService } from '../../services/remito.service';
 import { VendedorService, Vendedor } from '../../services/vendedor.service';
 import { ProductoService, Producto } from '../../services/producto.service';
 import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 @Component({
   selector: 'app-remitos',
@@ -46,7 +48,20 @@ export class RemitosComponent {
   @HostListener('document:click')
   cerrarDropdowns() {
     this.dropdownAbierto.set('');
+    this.mostrarDropdown.set(false); // Le decimos que también cierre el buscador si hacemos clic afuera
   }
+
+  // --- BUSCADOR INTELIGENTE VISUAL ---
+  terminoBusqueda = signal<string>('');
+  mostrarDropdown = signal<boolean>(false);
+
+  buscarJoya(termino: string) {
+    this.terminoBusqueda.set(termino);
+    this.productoSeleccionado.set('');
+    this.mostrarDropdown.set(true);
+  }
+
+  // ¡BORRAMOS LA FUNCIÓN ocultarDropdown() COMPLETA PORQUE YA NO HACE FALTA!
 
   toggleDropdown(menu: string, event: Event) {
     event.stopPropagation();
@@ -71,32 +86,12 @@ export class RemitosComponent {
     return vend ? vend.nombre : '';
   }
 
-  // --- BUSCADOR INTELIGENTE VISUAL ---
-  terminoBusqueda = signal<string>('');
-  mostrarDropdown = signal<boolean>(false);
-
-  buscarJoya(termino: string) {
-    this.terminoBusqueda.set(termino);
-    this.productoSeleccionado.set('');
-    this.mostrarDropdown.set(true);
-  }
-
-  seleccionarProducto(p: any) {
-    this.productoSeleccionado.set(p.id);
-    this.terminoBusqueda.set(`${p.codigo} - ${p.nombre}`);
-    this.mostrarDropdown.set(false);
-  }
-
-  ocultarDropdown() {
-    setTimeout(() => this.mostrarDropdown.set(false), 200);
-  }
-
   productosDisponibles = computed(() => {
     const busqueda = this.terminoBusqueda().toLowerCase();
-    const enCarritoIds = this.itemsCarrito().map((item) => item.producto_id);
 
+    // Ya NO filtramos (ocultamos) los que están en el carrito.
+    // Los dejamos visibles para que Adri pueda tildar/destildar los checkboxes.
     return this.productos().filter((p) => {
-      if (enCarritoIds.includes(p.id!)) return false;
       if (p.stock_disponible <= 0) return false;
       if (!busqueda) return true;
 
@@ -131,42 +126,6 @@ export class RemitosComponent {
 
   cargarHistorialRemitos() {
     this.remitoService.getRemitos().subscribe((r) => this.remitosHistorial.set(r));
-  }
-
-  agregarAlRemito() {
-    const prodId = Number(this.productoSeleccionado());
-    const cant = this.cantidadSeleccionada();
-
-    if (!prodId || cant <= 0) {
-      return Swal.fire('Atención', 'Seleccioná una joya y una cantidad válida.', 'warning');
-    }
-    const producto = this.productos().find((p) => p.id === prodId);
-    if (!producto) return;
-
-    if (cant > producto.stock_disponible) {
-      return Swal.fire(
-        'Stock Insuficiente',
-        `Solo tenés ${producto.stock_disponible} disponibles de esta joya.`,
-        'warning',
-      );
-    }
-
-    const itemsActuales = this.itemsCarrito();
-    this.itemsCarrito.set([
-      ...itemsActuales,
-      {
-        producto_id: producto.id,
-        codigo: producto.codigo,
-        nombre: producto.nombre,
-        cantidad: cant,
-        stock_maximo: producto.stock_disponible,
-      },
-    ]);
-
-    this.productoSeleccionado.set('');
-    this.cantidadSeleccionada.set(1);
-    this.terminoBusqueda.set('');
-    return;
   }
 
   quitarDelRemito(index: number) {
@@ -337,12 +296,78 @@ export class RemitosComponent {
     this.itemsAgrupados.set({});
   }
 
+  // --- NUEVA LÓGICA DE SELECCIÓN MÚLTIPLE (CHECKBOXES) ---
+  estaEnCarrito(productoId: number): boolean {
+    return this.itemsCarrito().some((item) => item.producto_id === productoId);
+  }
+
+  toggleProductoCarrito(producto: any, event: Event) {
+    event.stopPropagation(); // Evitamos que el dropdown se cierre
+    const itemsActuales = this.itemsCarrito();
+    const existe = itemsActuales.find((item) => item.producto_id === producto.id);
+
+    if (existe) {
+      // Si ya estaba tildado, lo sacamos del remito
+      this.itemsCarrito.set(itemsActuales.filter((item) => item.producto_id !== producto.id));
+    } else {
+      // Si lo tildó, lo agregamos automáticamente con cantidad 1
+      this.itemsCarrito.set([
+        ...itemsActuales,
+        {
+          producto_id: producto.id,
+          codigo: producto.codigo,
+          nombre: producto.nombre,
+          cantidad: 1, // Adri luego puede cambiar este 1 por un 5 en la tabla de abajo
+          stock_maximo: producto.stock_disponible,
+          precio: producto.precio,
+        },
+      ]);
+    }
+  }
+
+  // --- NUEVA LÓGICA DE PDF DIRECTO ---
   imprimirDocumento(tipo: 'remito' | 'ticket') {
     this.modoImpresion.set(tipo);
+
+    Swal.fire({
+      title: 'Generando PDF...',
+      text: 'Acomodando el documento, por favor esperá...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    // Le damos 1 seg a Angular para que dibuje la vista de impresión en pantalla
     setTimeout(() => {
-      window.print();
-      this.modoImpresion.set(''); // Apagamos el semáforo al terminar
-    }, 100);
+      const elementId = tipo === 'remito' ? 'zona-impresion' : 'ticket-liquidacion';
+      const element = document.getElementById(elementId);
+
+      if (element) {
+        html2canvas(element, { scale: 2 }).then((canvas) => {
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4'); // Formato A4 Vertical
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+          // Nombre del archivo dinámico y profesional
+          const vendedora = this.remitoEnDetalle()?.vendedor || 'Vendedora';
+          const num = this.remitoEnDetalle()?.id || '';
+          const nombreArchivo =
+            tipo === 'remito'
+              ? `Remito_${num}_${vendedora}.pdf`
+              : `Liquidacion_${num}_${vendedora}.pdf`;
+
+          pdf.save(nombreArchivo); // FORZA LA DESCARGA DIRECTA
+
+          this.modoImpresion.set(''); // Restauramos la pantalla normal
+          Swal.close();
+        });
+      } else {
+        Swal.fire('Error', 'No se pudo generar el documento.', 'error');
+        this.modoImpresion.set('');
+      }
+    }, 800);
   }
 
   // ==========================================
