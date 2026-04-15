@@ -137,6 +137,7 @@ export class RemitosComponent {
   guardarRemitoFinal() {
     const vendId = Number(this.vendedorSeleccionado());
     const items = this.itemsCarrito();
+    const remitoEdit = this.remitoEnEdicion(); // Detectamos si estamos editando
 
     if (!vendId)
       return Swal.fire('Faltan datos', 'Por favor, seleccioná una vendedora.', 'warning');
@@ -158,26 +159,30 @@ export class RemitosComponent {
       items: items.map((item) => ({ producto_id: item.producto_id, cantidad: item.cantidad })),
     };
 
-    this.remitoService.crearRemito(payload).subscribe({
+    // --- BLOQUE NUEVO: ELECCIÓN DE RUTA (CREAR O EDITAR) ---
+    const operacion = remitoEdit
+      ? this.remitoService.editarRemito(remitoEdit.id, payload)
+      : this.remitoService.crearRemito(payload);
+
+    operacion.subscribe({
       next: () => {
         Swal.fire({
           icon: 'success',
-          title: '¡Remito Generado!',
-          text: 'Se guardó correctamente y el stock fue actualizado.',
+          title: remitoEdit ? '¡Remito Actualizado!' : '¡Remito Generado!',
+          text: 'Se guardó correctamente y el stock fue recalculado.',
           confirmButtonColor: '#B87366',
         });
 
+        // Limpieza total del formulario y estados
         this.vendedorSeleccionado.set('');
         this.itemsCarrito.set([]);
-        // this.cancelarCierre();
+        this.remitoEnEdicion.set(null); // MUY IMPORTANTE: Salimos del modo edición
         this.cerrarDetalle();
-        this.remitosHistorial.set([]);
         this.cargarHistorialRemitos();
         this.cargarDatosBase();
       },
-      error: () => Swal.fire('Error', 'Hubo un problema al guardar el remito.', 'error'),
+      error: () => Swal.fire('Error', 'Hubo un problema al procesar el remito.', 'error'),
     });
-
     return;
   }
 
@@ -251,7 +256,11 @@ export class RemitosComponent {
 
   modoImpresion = signal<'remito' | 'ticket' | ''>('');
 
+  remitoEnEdicion = signal<any | null>(null);
+  vistaDetalleActual = signal<'entrega' | 'liquidacion'>('entrega');
+
   abrirDetalle(remito: any) {
+    this.vistaDetalleActual.set('entrega');
     this.remitoEnDetalle.set(remito);
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (items) => {
@@ -290,6 +299,35 @@ export class RemitosComponent {
     });
   }
 
+  // NUEVAS FUNCIONES DE EDICIÓN
+  editarRemitoHistorico(remito: any) {
+    this.remitoEnEdicion.set(remito);
+    this.vendedorSeleccionado.set(remito.vendedor_id);
+
+    this.remitoService.getRemitoItems(remito.id).subscribe((items) => {
+      const carritoEdit = items.map((i: any) => {
+        const prodBase = this.productos().find((p) => p.id === i.producto_id);
+        const stockActual = prodBase ? prodBase.stock_disponible : 0;
+        return {
+          producto_id: i.producto_id,
+          codigo: i.codigo,
+          nombre: i.nombre,
+          cantidad: i.cantidad_entregada,
+          stock_maximo: i.cantidad_entregada + stockActual,
+          precio: i.precio,
+        };
+      });
+      this.itemsCarrito.set(carritoEdit);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  cancelarEdicionRemito() {
+    this.remitoEnEdicion.set(null);
+    this.vendedorSeleccionado.set('');
+    this.itemsCarrito.set([]);
+  }
+
   cerrarDetalle() {
     this.remitoEnDetalle.set(null);
     this.itemsEnDetalle.set([]);
@@ -325,18 +363,15 @@ export class RemitosComponent {
     }
   }
 
-  // --- NUEVA LÓGICA DE PDF DIRECTO ---
-  imprimirDocumento(tipo: 'remito' | 'ticket') {
-    this.modoImpresion.set(tipo);
+  imprimirVistaActual() {
+    const tipo = this.vistaDetalleActual() === 'entrega' ? 'remito' : 'ticket';
 
     Swal.fire({
       title: 'Generando PDF...',
-      text: 'Acomodando el documento, por favor esperá...',
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading(),
     });
 
-    // Le damos 1 seg a Angular para que dibuje la vista de impresión en pantalla
     setTimeout(() => {
       const elementId = tipo === 'remito' ? 'zona-impresion' : 'ticket-liquidacion';
       const element = document.getElementById(elementId);
@@ -344,28 +379,19 @@ export class RemitosComponent {
       if (element) {
         html2canvas(element, { scale: 2 }).then((canvas) => {
           const imgData = canvas.toDataURL('image/png');
-          const pdf = new jsPDF('p', 'mm', 'a4'); // Formato A4 Vertical
+          const pdf = new jsPDF('p', 'mm', 'a4');
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
           pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
-          // Nombre del archivo dinámico y profesional
-          const vendedora = this.remitoEnDetalle()?.vendedor || 'Vendedora';
-          const num = this.remitoEnDetalle()?.id || '';
           const nombreArchivo =
             tipo === 'remito'
-              ? `Remito_${num}_${vendedora}.pdf`
-              : `Liquidacion_${num}_${vendedora}.pdf`;
+              ? `Remito_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`
+              : `Liquidacion_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`;
 
-          pdf.save(nombreArchivo); // FORZA LA DESCARGA DIRECTA
-
-          this.modoImpresion.set(''); // Restauramos la pantalla normal
+          pdf.save(nombreArchivo);
           Swal.close();
         });
-      } else {
-        Swal.fire('Error', 'No se pudo generar el documento.', 'error');
-        this.modoImpresion.set('');
       }
     }, 800);
   }
@@ -377,7 +403,7 @@ export class RemitosComponent {
   // 1. Abre la ventanita cuando hacemos clic en "Cerrar Remito"
   abrirModalLiquidacion(remito: any) {
     this.remitoLiquidacion.set(remito);
-
+    console.log('Remito para liquidar:', remito);
     // Le pedimos al backend los items reales de ESTE remito
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (itemsBackend) => {

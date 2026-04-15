@@ -35,4 +35,8 @@ export class RemitoService {
   cerrarRemito(id: number, payload: any): Observable<any> {
     return this.http.put(`${this.apiUrl}/${id}/cerrar`, payload);
   }
+
+  editarRemito(id: number, datos: any) {
+    return this.http.put(`${this.apiUrl}/${id}`, datos);
+  }
 }

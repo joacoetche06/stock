@@ -17,27 +17,54 @@ export class ProductosComponent {
   filtroCategoria = signal<string>('');
   filtroMaterial = signal<string>('');
 
-  // Magia de Angular: Filtra la tabla en tiempo real
+  // NUEVAS VARIABLES DE ORDENAMIENTO
+  columnaOrden = signal<string>('nombre');
+  ordenAscendente = signal<boolean>(true);
+
+  cambiarOrden(columna: string) {
+    if (this.columnaOrden() === columna) {
+      this.ordenAscendente.set(!this.ordenAscendente()); // Invierte de A-Z a Z-A
+    } else {
+      this.columnaOrden.set(columna);
+      this.ordenAscendente.set(true);
+    }
+  }
+
+  // Magia de Angular: Filtra y ORDENA la tabla en tiempo real
   productosFiltrados = computed(() => {
     const texto = this.filtroTexto().toLowerCase();
     const categoria = this.filtroCategoria();
     const material = this.filtroMaterial();
+    const col = this.columnaOrden();
+    const asc = this.ordenAscendente() ? 1 : -1;
 
-    return this.productos().filter((p) => {
-      // 1. Filtro por Categoría (Si eligió una y no coincide, lo ocultamos)
+    let filtrados = this.productos().filter((p) => {
       if (categoria && p.categoria !== categoria) return false;
-
-      // 2. Filtro por Material
       if (material && p.material !== material) return false;
-
-      // 3. Filtro por Texto (Busca en el nombre o en el código)
       if (texto) {
         const nombreMatch = p.nombre.toLowerCase().includes(texto);
         const codigoMatch = (p.codigo || '').toLowerCase().includes(texto);
         if (!nombreMatch && !codigoMatch) return false;
       }
+      return true;
+    });
 
-      return true; // Si pasó todos los filtros, se muestra
+    // APLICAMOS EL ORDENAMIENTO
+    return filtrados.sort((a: any, b: any) => {
+      // Regla de Oro: Stock 0 o negativo SIEMPRE al final de todo
+      if (a.stock_disponible <= 0 && b.stock_disponible > 0) return 1;
+      if (b.stock_disponible <= 0 && a.stock_disponible > 0) return -1;
+
+      // Ordenamiento normal para los que sí tienen stock
+      let valA = a[col] || '';
+      let valB = b[col] || '';
+
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+
+      if (valA < valB) return -1 * asc;
+      if (valA > valB) return 1 * asc;
+      return 0;
     });
   });
   // Variable para saber si estamos editando (guarda el ID) o creando (queda en null)

@@ -302,7 +302,7 @@
   </div>
 
   <table style="max-width: 900px">
-    <thead>
+    <thead style="user-select: none">
       <tr>
         <th style="width: 40px; text-align: center">
           <input
@@ -312,12 +312,32 @@
             style="cursor: pointer; transform: scale(1.2)"
           />
         </th>
-        <th>Código</th>
-        <th>Categoría</th>
-        <th>Material</th>
-        <th>Descripción</th>
-        <th>Precio</th>
-        <th>Stock Disp.</th>
+        <th (click)="cambiarOrden('codigo')" style="cursor: pointer">
+          Código
+          <span *ngIf="columnaOrden() === 'codigo'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
+        </th>
+        <th (click)="cambiarOrden('categoria')" style="cursor: pointer">
+          Categoría
+          <span *ngIf="columnaOrden() === 'categoria'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
+        </th>
+        <th (click)="cambiarOrden('material')" style="cursor: pointer">
+          Material
+          <span *ngIf="columnaOrden() === 'material'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
+        </th>
+        <th (click)="cambiarOrden('nombre')" style="cursor: pointer">
+          Descripción
+          <span *ngIf="columnaOrden() === 'nombre'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
+        </th>
+        <th (click)="cambiarOrden('precio')" style="cursor: pointer">
+          Precio
+          <span *ngIf="columnaOrden() === 'precio'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
+        </th>
+        <th (click)="cambiarOrden('stock_disponible')" style="cursor: pointer">
+          Stock Disp.
+          <span *ngIf="columnaOrden() === 'stock_disponible'">{{
+            ordenAscendente() ? '⬆️' : '⬇️'
+          }}</span>
+        </th>
         <th>Acciones</th>
       </tr>
     </thead>

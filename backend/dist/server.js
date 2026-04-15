@@ -395,7 +395,7 @@ app.post("/api/remitos", async (req, res) => {
 app.get("/api/remitos", async (req, res) => {
     try {
         const remitos = await db.all(`
-            SELECT r.id, r.fecha_salida, r.estado, r.comision, v.nombre as vendedor 
+            SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, v.nombre as vendedor 
             FROM Remitos r
             JOIN Vendedores v ON r.vendedor_id = v.id
         `);
@@ -458,6 +458,41 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
         await db.run("ROLLBACK");
         console.error(error);
         res.status(500).json({ error: "Error al cerrar el remito" });
+    }
+});
+// Modificar Remito Pendiente (Restaurar stock viejo, descontar stock nuevo)
+app.put("/api/remitos/:id", async (req, res) => {
+    const remitoId = req.params.id;
+    const { vendedor_id, items } = req.body;
+    if (!items || items.length === 0)
+        return res.status(400).json({ error: "El remito no puede estar vacío." });
+    try {
+        await db.run("BEGIN TRANSACTION");
+        // ACTUALIZAMOS EL VENDEDOR POR SI LO CAMBIARON EN LA EDICIÓN
+        if (vendedor_id) {
+            await db.run(`UPDATE Remitos SET vendedor_id = ? WHERE id = ?`, [
+                vendedor_id,
+                remitoId,
+            ]);
+        }
+        // 1. Obtener items viejos para restaurar su stock disponible en el inventario
+        const itemsViejos = await db.all(`SELECT producto_id, cantidad_entregada FROM Remitos_Items WHERE remito_id = ?`, [remitoId]);
+        for (const viejo of itemsViejos) {
+            await db.run(`UPDATE Productos SET stock_disponible = stock_disponible + ? WHERE id = ?`, [viejo.cantidad_entregada, viejo.producto_id]);
+        }
+        // 2. Borrar los items viejos
+        await db.run(`DELETE FROM Remitos_Items WHERE remito_id = ?`, [remitoId]);
+        // 3. Insertar los nuevos items y descontar el nuevo stock
+        for (const item of items) {
+            await db.run(`INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`, [remitoId, item.producto_id, item.cantidad]);
+            await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id = ?`, [item.cantidad, item.producto_id]);
+        }
+        await db.run("COMMIT");
+        res.json({ mensaje: "Remito editado y stock recalculado correctamente" });
+    }
+    catch (error) {
+        await db.run("ROLLBACK");
+        res.status(500).json({ error: "Error al editar el remito" });
     }
 });
 // --- RUTAS PARA ELIMINAR ---
