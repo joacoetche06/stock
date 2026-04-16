@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ProductoService, Producto } from '../../services/producto.service';
 import Swal from 'sweetalert2';
+import jsPDF from 'jspdf';
+
 @Component({
   selector: 'app-productos',
   standalone: true,
@@ -432,5 +434,57 @@ export class ProductosComponent {
         });
       }
     });
+  }
+
+  descargarListaPrecios(): void {
+    const productosParaLista = this.productos().filter((p) => p.stock_real > 0);
+
+    if (productosParaLista.length === 0) {
+      Swal.fire('Lista vacía', 'No hay productos con stock real mayor a cero.', 'info');
+      return; // Cortamos la ejecución acá correctamente
+    }
+
+    const doc = new jsPDF();
+    const fecha = new Date().toLocaleDateString();
+
+    // Título
+    doc.setFontSize(18);
+    doc.text('Lista de Precios - Chicas de Buenos Aires', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${fecha}`, 14, 28);
+
+    // Encabezados de tabla
+    let y = 40;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Código', 14, y);
+    doc.text('Descripción', 40, y);
+    doc.text('Material', 120, y);
+    doc.text('Precio', 170, y);
+    doc.line(14, y + 2, 195, y + 2);
+    y += 10;
+
+    // Filas
+    doc.setFont('helvetica', 'normal');
+    productosParaLista.forEach((p) => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+
+      // Blindaje de TypeScript: Forzamos todo a ser un String sí o sí
+      const cod = p.codigo ? String(p.codigo) : '-';
+      const nom = p.nombre ? String(p.nombre).substring(0, 40) : '-';
+      const mat = p.material ? String(p.material) : '-';
+      const prec = p.precio !== undefined ? `$${p.precio.toLocaleString()}` : '-';
+
+      doc.text(cod, 14, y);
+      doc.text(nom, 40, y);
+      doc.text(mat, 120, y);
+      doc.text(prec, 170, y);
+      y += 8;
+    });
+
+    doc.save(`Lista_Precios_${fecha.replace(/\//g, '-')}.pdf`);
+    Swal.fire('¡Éxito!', 'La lista de precios se descargó correctamente.', 'success');
   }
 }

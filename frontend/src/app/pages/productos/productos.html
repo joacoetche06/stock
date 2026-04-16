@@ -303,6 +303,14 @@
     </button>
   </div>
 
+  <button
+    (click)="descargarListaPrecios()"
+    class="btn btn-secundario"
+    style="background-color: #28a745; color: white"
+  >
+    📄 Descargar Lista de Precios (Stock > 0)
+  </button>
+
   <table style="max-width: 900px">
     <thead style="user-select: none">
       <tr>
@@ -334,7 +342,19 @@
           Precio
           <span *ngIf="columnaOrden() === 'precio'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
         </th>
-        <th (click)="cambiarOrden('stock_disponible')" style="cursor: pointer">
+        <th
+          (click)="cambiarOrden('stock_real')"
+          style="cursor: pointer"
+          title="Stock total (Local + Vendedoras)"
+        >
+          Stock Total
+          <span *ngIf="columnaOrden() === 'stock_real'">{{ ordenAscendente() ? '⬆️' : '⬇️' }}</span>
+        </th>
+        <th
+          (click)="cambiarOrden('stock_disponible')"
+          style="cursor: pointer"
+          title="Stock físico en el local"
+        >
           Stock Disp.
           <span *ngIf="columnaOrden() === 'stock_disponible'">{{
             ordenAscendente() ? '⬆️' : '⬇️'
@@ -371,6 +391,9 @@
         <td>{{ prod.material }}</td>
         <td>{{ prod.nombre }}</td>
         <td>$ {{ prod.precio }}</td>
+        <td style="color: #007bff; text-align: center; font-size: 1.1em">
+          <strong>{{ prod.stock_real }}</strong>
+        </td>
         <td style="color: #28a745; text-align: center; font-size: 1.1em">
           <strong>{{ prod.stock_disponible }}</strong>
         </td>
@@ -384,7 +407,7 @@
         </td>
       </tr>
       <tr *ngIf="productosFiltrados().length === 0">
-        <td colspan="8" style="text-align: center; padding: 30px; color: #6c757d">
+        <td colspan="9" style="text-align: center; padding: 30px; color: #6c757d">
           No hay productos cargados en la base con esos filtros.
         </td>
       </tr>
