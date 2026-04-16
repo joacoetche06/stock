@@ -39,7 +39,7 @@
   }
 
   /* Posicionamos cualquiera de los dos arriba de todo */
-  #zona-impresion, 
+  #zona-impresion,
   #ticket-liquidacion {
     position: absolute;
     left: 0;
@@ -80,21 +80,49 @@ body {
   color: var(--color-texto);
 }
 
-/* Opcional: Un estilo genérico para las tablas y que queden más finas */
+/* =========================================
+   ESTILOS DE TABLAS PREMIUM
+   ========================================= */
 table {
   border-collapse: collapse;
   width: 100%;
   background: var(--color-blanco);
-  border-radius: 8px;
+  border-radius: 10px; /* Bordes un pelín más redondeados */
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* Sombra un poco más amplia y suave */
+  margin-bottom: 25px; /* Más separación con lo que haya abajo */
 }
+
 thead th {
   background-color: var(--color-texto) !important;
   color: var(--color-blanco);
-  padding: 12px;
+  padding: 16px 12px; /* ¡Más aire en la cabecera! */
+  font-weight: 600;
+  font-size: 0.9em;
+  text-transform: uppercase; /* Los títulos en mayúscula quedan más pro */
+  letter-spacing: 0.5px; /* Apenas un respiro entre letras */
 }
 
+/* --- EL SECRETO PARA QUE NO ESTÉN PEGADAS --- */
+tbody td {
+  padding: 16px 12px; /* Acá le damos 16px de espacio arriba y abajo a cada dato */
+  vertical-align: middle;
+  border-bottom: 1px solid #f1f3f5; /* Línea separadora muy sutil y elegante */
+}
+
+/* --- EFECTO HOVER (Al pasar el mouse) --- */
+tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+tbody tr:hover {
+  background-color: #fdfaf9; /* Tono super sutil de "Rose Gold" para resaltar la fila que estás mirando */
+}
+
+/* Evitamos que el efecto hover pinte las filas vacías como "No hay productos" */
+tbody tr:hover td[colspan] {
+  background-color: transparent;
+}
 /* --- BOTONES GLOBALES --- */
 .btn {
   padding: 10px 16px;
