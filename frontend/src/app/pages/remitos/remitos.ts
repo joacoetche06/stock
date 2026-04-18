@@ -211,18 +211,23 @@ export class RemitosComponent {
 
         if (remito.estado === 'Cerrado') {
           let suma = 0;
+          let sumaTotalVendido = 0; // <-- NUEVA VARIABLE
+
           items.forEach((item: any) => {
             if (item.cantidad_vendida > 0) {
               const descuento = item.precio * ((remito.comision || 0) / 100);
-              suma += (item.precio - descuento) * item.cantidad_vendida;
+              suma += (item.precio - descuento) * item.cantidad_vendida; // Lo que rinde (neto)
+              sumaTotalVendido += item.precio * item.cantidad_vendida; // Lo que vendió (bruto)
             }
           });
+
           this.ticketImpresion.set({
             vendedor: remito.vendedor,
             fecha: new Date(),
             comision: remito.comision || 0,
             items,
             totalNeto: suma,
+            totalVendido: sumaTotalVendido, // <-- LO GUARDAMOS EN EL TICKET
           });
         } else {
           this.ticketImpresion.set(null);
