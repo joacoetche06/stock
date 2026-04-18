@@ -1,79 +1,39 @@
 <div>
   <div [class]="editandoId() ? 'tarjeta tarjeta-edicion' : 'tarjeta'" style="max-width: 500px">
     <h3 style="margin-top: 0; color: var(--color-principal)">
-      {{ editandoId() ? '✏️ Editando Vendedora' : '+ Cargar Nueva Vendedora' }}
+      {{ editandoId() ? '✏️ Editando ' + (nombreVendedor | titlecase) : '+ Cargar Nuevo/a ' + (nombreVendedor | titlecase) }}
     </h3>
 
     <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
-      <input
-        type="text"
-        placeholder="Nombre completo"
-        [(ngModel)]="nuevoVendedor.nombre"
-        class="input-form"
-        style="flex-grow: 1"
-      />
-      <input
-        type="text"
-        placeholder="Teléfono (Opcional)"
-        [(ngModel)]="nuevoVendedor.telefono"
-        class="input-form"
-        style="width: 150px"
-      />
-
-      <button
-        (click)="guardarVendedor()"
-        [class]="editandoId() ? 'btn btn-advertencia' : 'btn btn-principal'"
-      >
+      <input type="text" placeholder="Nombre completo" [(ngModel)]="nuevoVendedor.nombre" class="input-form" style="flex-grow: 1" />
+      <input type="text" placeholder="Teléfono (Opcional)" [(ngModel)]="nuevoVendedor.telefono" class="input-form" style="width: 150px" />
+      <button (click)="guardarVendedor()" [class]="editandoId() ? 'btn btn-advertencia' : 'btn btn-principal'">
         {{ editandoId() ? '💾 Actualizar' : '+ Agregar' }}
       </button>
-
-      <button *ngIf="editandoId()" (click)="limpiarFormulario()" class="btn btn-secundario">
-        Cancelar
-      </button>
+      <button *ngIf="editandoId()" (click)="limpiarFormulario()" class="btn btn-secundario">Cancelar</button>
     </div>
   </div>
 
   <table style="max-width: 540px">
     <thead>
       <tr>
-        <th>Nombre de Vendedora</th>
+        <th>Nombre</th>
         <th>Teléfono</th>
         <th style="text-align: center">Acciones</th>
       </tr>
     </thead>
     <tbody>
-      <tr
-        *ngFor="let vend of vendedores()"
-        style="border-bottom: 1px solid #eee; text-align: center"
-      >
-        <td style="font-size: 1.1em; color: var(--color-texto)">
-          <strong>{{ vend.nombre }}</strong>
-        </td>
-
-        <td [style.color]="vend.telefono ? 'inherit' : '#adb5bd'" style="font-size: 1.05em">
-          {{ vend.telefono || 'Sin teléfono' }}
-        </td>
-
+      <tr *ngFor="let vend of vendedores()" style="border-bottom: 1px solid #eee; text-align: center">
+        <td style="font-size: 1.1em; color: var(--color-texto)"><strong>{{ vend.nombre }}</strong></td>
+        <td [style.color]="vend.telefono ? 'inherit' : '#adb5bd'" style="font-size: 1.05em">{{ vend.telefono || 'Sin teléfono' }}</td>
         <td style="display: flex; gap: 8px; justify-content: center">
-          <button
-            (click)="editar(vend)"
-            class="btn btn-editar"
-            style="padding: 6px 12px; font-size: 0.9em"
-          >
-            ✏️ Editar
-          </button>
-          <button
-            (click)="eliminar(vend.id!)"
-            class="btn btn-eliminar"
-            style="padding: 6px 12px; font-size: 0.9em"
-          >
-            🗑️ Eliminar
-          </button>
+          <button (click)="editar(vend)" class="btn btn-editar" style="padding: 6px 12px; font-size: 0.9em">✏️ Editar</button>
+          <button (click)="eliminar(vend.id!)" class="btn btn-eliminar" style="padding: 6px 12px; font-size: 0.9em">🗑️ Eliminar</button>
         </td>
       </tr>
       <tr *ngIf="vendedores().length === 0">
         <td colspan="3" style="text-align: center; padding: 30px; color: #6c757d; font-size: 1.1em">
-          Aún no hay vendedoras cargadas en el sistema.
+          Aún no hay {{ nombreVendedorPlural }} cargados en el sistema.
         </td>
       </tr>
     </tbody>

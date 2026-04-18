@@ -1,0 +1,34 @@
+{
+  "negocio": {
+    "nombre": "Mi Negocio",
+    "nombreCorto": "Mi Negocio",
+    "slogan": "Sistema de Stock",
+    "colorPrincipal": "#b87366",
+    "colorSecundario": "#f4d1d1",
+    "colorAcento": "#b5d8cc"
+  },
+  "app": {
+    "puerto": 3001,
+    "nombreBD": "stock-app.sqlite",
+    "comisionDefault": 25
+  },
+  "inventario": {
+    "nombreProducto": "producto",
+    "nombreProductoPlural": "productos",
+    "nombreVendedor": "vendedor",
+    "nombreVendedorPlural": "vendedores",
+    "usaMedida": false,
+    "categoriaConMedida": "",
+    "medidas": [],
+    "categorias": [
+      { "nombre": "Categoría 1", "prefijo": "C1" },
+      { "nombre": "Categoría 2", "prefijo": "C2" },
+      { "nombre": "Categoría 3", "prefijo": "C3" }
+    ],
+    "materiales": [
+      "Material 1",
+      "Material 2",
+      "Material 3"
+    ]
+  }
+}

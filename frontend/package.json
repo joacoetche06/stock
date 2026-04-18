@@ -36,7 +36,8 @@
     "jspdf": "^4.2.1",
     "rxjs": "~7.8.0",
     "sweetalert2": "^11.26.24",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zone.js": "^0.15.1"
   },
   "devDependencies": {
     "@angular/build": "^20.2.1",

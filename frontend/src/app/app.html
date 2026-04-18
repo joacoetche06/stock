@@ -1,13 +1,18 @@
 <div class="app-container">
   <nav class="sidebar">
-    <img src="logo.png" alt="Logo CHICAS" class="logo" />
+    <img src="logo.ico" alt="Logo" class="logo" />
+    <div class="negocio-nombre" *ngIf="configService.config()">
+      {{ configService.config()!.negocio.nombreCorto }}
+    </div>
 
     <ul class="nav-links">
       <li><a routerLink="/productos" routerLinkActive="active-link">📦 Inventario</a></li>
-      <li><a routerLink="/vendedores" routerLinkActive="active-link">👥 Vendedoras</a></li>
+      <li>
+        <a routerLink="/vendedores" routerLinkActive="active-link"
+          >👥 {{ configService.nombreVendedorPlural | titlecase }}</a
+        >
+      </li>
       <li><a routerLink="/remitos" routerLinkActive="active-link">📝 Remitos</a></li>
-      <!-- comentado etiquetas porque no se va a utilizar por ahora -->
-      <!-- <li><a routerLink="/etiquetas" routerLinkActive="active-link">🏷️ Etiquetas</a></li> -->
     </ul>
   </nav>
 

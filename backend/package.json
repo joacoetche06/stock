@@ -1,5 +1,5 @@
 {
-  "name": "chicas-stock",
+  "name": "stock-template",
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
@@ -10,8 +10,8 @@
     "empaquetar": "electron-builder --win"
   },
   "build": {
-    "appId": "com.joyeriaadri.stock",
-    "productName": "Chicas de Buenos Aires",
+    "appId": "com.joaco.stock",
+    "productName": "Sistema de Inventario",
     "directories": {
       "output": "instalador-final"
     },
@@ -29,7 +29,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Chicas de Buenos Aires"
+      "shortcutName": "Sistema de Inventario"
     }
   },
   "dependencies": {
