@@ -1,34 +1,33 @@
 {
   "negocio": {
-    "nombre": "Mi Negocio",
-    "nombreCorto": "Mi Negocio",
-    "slogan": "Sistema de Stock",
+    "nombre": "Chicas de Buenos Aires",
+    "nombreCorto": "CHICAS",
+    "slogan": "Joyería y Accesorios",
     "colorPrincipal": "#b87366",
     "colorSecundario": "#f4d1d1",
     "colorAcento": "#b5d8cc"
   },
   "app": {
     "puerto": 3001,
-    "nombreBD": "stock-app.sqlite",
+    "nombreBD": "app-adri.sqlite",
     "comisionDefault": 25
   },
   "inventario": {
-    "nombreProducto": "producto",
-    "nombreProductoPlural": "productos",
-    "nombreVendedor": "vendedor",
-    "nombreVendedorPlural": "vendedores",
-    "usaMedida": false,
-    "categoriaConMedida": "",
-    "medidas": [],
+    "nombreProducto": "joya",
+    "nombreProductoPlural": "joyas",
+    "nombreVendedor": "vendedora",
+    "nombreVendedorPlural": "vendedoras",
+    "usaMedida": true,
+    "categoriaConMedida": "Cadenas",
+    "medidas": ["40 cm", "45 cm", "50 cm", "55 cm", "60 cm"],
     "categorias": [
-      { "nombre": "Categoría 1", "prefijo": "C1" },
-      { "nombre": "Categoría 2", "prefijo": "C2" },
-      { "nombre": "Categoría 3", "prefijo": "C3" }
+      { "nombre": "Collares" },
+      { "nombre": "Cadenas" },
+      { "nombre": "Dijes" },
+      { "nombre": "Pulseras" },
+      { "nombre": "Aros" },
+      { "nombre": "Anillos" }
     ],
-    "materiales": [
-      "Material 1",
-      "Material 2",
-      "Material 3"
-    ]
+    "materiales": ["Acero", "Acero blanco", "Plata", "Cristal", "Otro"]
   }
 }
