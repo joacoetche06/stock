@@ -18,7 +18,9 @@ try {
   CONFIG = JSON.parse(raw);
   console.log(`✅ Config cargada: ${CONFIG.negocio?.nombre}`);
 } catch (e) {
-  console.error("❌ No se pudo leer config.json. Asegurate de que exista en la raíz del backend.");
+  console.error(
+    "❌ No se pudo leer config.json. Asegurate de que exista en la raíz del backend.",
+  );
   process.exit(1);
 }
 
@@ -32,7 +34,10 @@ app.use(express.json());
 let db: any;
 
 const rutaSegura = process.env.USER_DATA_PATH || path.join(__dirname, "..");
-const dbPath = path.join(rutaSegura, CONFIG.app?.nombreBD || "stock-app.sqlite");
+const dbPath = path.join(
+  rutaSegura,
+  CONFIG.app?.nombreBD || "stock-app.sqlite",
+);
 
 // ============================================================
 // INICIALIZACIÓN DE BASE DE DATOS
@@ -91,7 +96,9 @@ async function inicializarDB() {
       `ALTER TABLE Remitos ADD COLUMN comision REAL DEFAULT 0;`,
     ];
     for (const m of migraciones) {
-      try { await db.exec(m); } catch (_) {}
+      try {
+        await db.exec(m);
+      } catch (_) {}
     }
 
     console.log("📦 Tablas sincronizadas correctamente.");
@@ -109,7 +116,10 @@ app.get("/api/config", (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
-  res.json({ mensaje: "Servidor funcionando correctamente.", negocio: CONFIG.negocio?.nombre });
+  res.json({
+    mensaje: "Servidor funcionando correctamente.",
+    negocio: CONFIG.negocio?.nombre,
+  });
 });
 
 // ============================================================
@@ -126,22 +136,23 @@ app.get("/api/productos", async (req, res) => {
 });
 
 app.post("/api/productos", async (req, res) => {
-  const categoria  = req.body.categoria  || "";
-  const material   = req.body.material   || "";
-  const medida     = req.body.medida     || "";
-  const nombre     = req.body.nombre     || "";
-  const precio     = req.body.precio     || 0;
+  const categoria = req.body.categoria || "";
+  const material = req.body.material || "";
+  const medida = req.body.medida || "";
+  const nombre = req.body.nombre || "";
+  const precio = req.body.precio || 0;
   const stock_real = req.body.stock_real || 0;
 
   // Buscamos el prefijo en la config
-  const cats: { nombre: string; prefijo: string }[] = CONFIG.inventario?.categorias || [];
+  const cats: { nombre: string; prefijo: string }[] =
+    CONFIG.inventario?.categorias || [];
   const catConfig = cats.find((c) => c.nombre === categoria);
-  const prefijo = catConfig ? catConfig.prefijo : "OT";
+  const prefijo = catConfig?.prefijo || "OT";
 
   try {
     const row = await db.get(
       `SELECT codigo FROM Productos WHERE codigo LIKE ? ORDER BY CAST(SUBSTR(codigo, ${prefijo.length + 1}) AS INTEGER) DESC LIMIT 1`,
-      [`${prefijo}%`]
+      [`${prefijo}%`],
     );
 
     let nuevoNumero = 1;
@@ -155,10 +166,23 @@ app.post("/api/productos", async (req, res) => {
     const result = await db.run(
       `INSERT INTO Productos (codigo, categoria, material, medida, nombre, precio, stock_real, stock_disponible)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [codigoGenerado, categoria, material, medida, nombre, precio, stock_real, stock_real]
+      [
+        codigoGenerado,
+        categoria,
+        material,
+        medida,
+        nombre,
+        precio,
+        stock_real,
+        stock_real,
+      ],
     );
 
-    res.json({ id: result.lastID, codigo: codigoGenerado, mensaje: "Producto creado" });
+    res.json({
+      id: result.lastID,
+      codigo: codigoGenerado,
+      mensaje: "Producto creado",
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al crear el producto" });
@@ -168,10 +192,13 @@ app.post("/api/productos", async (req, res) => {
 app.post("/api/productos/masivo", async (req, res) => {
   const { productos } = req.body;
   if (!productos || !Array.isArray(productos) || productos.length === 0) {
-    return res.status(400).json({ error: "No se recibieron productos válidos." });
+    return res
+      .status(400)
+      .json({ error: "No se recibieron productos válidos." });
   }
 
-  const cats: { nombre: string; prefijo: string }[] = CONFIG.inventario?.categorias || [];
+  const cats: { nombre: string; prefijo: string }[] =
+    CONFIG.inventario?.categorias || [];
 
   try {
     await db.run("BEGIN TRANSACTION");
@@ -180,11 +207,11 @@ app.post("/api/productos/masivo", async (req, res) => {
     for (const prod of productos) {
       const categoria = prod.categoria || "";
       const catConfig = cats.find((c) => c.nombre === categoria);
-      const prefijo = catConfig ? catConfig.prefijo : "OT";
+      const prefijo = catConfig?.prefijo || "OT";
 
       const row = await db.get(
         `SELECT codigo FROM Productos WHERE codigo LIKE ? ORDER BY CAST(SUBSTR(codigo, ${prefijo.length + 1}) AS INTEGER) DESC LIMIT 1`,
-        [`${prefijo}%`]
+        [`${prefijo}%`],
       );
 
       let nuevoNumero = 1;
@@ -199,31 +226,46 @@ app.post("/api/productos/masivo", async (req, res) => {
       await db.run(
         `INSERT INTO Productos (codigo, categoria, material, medida, nombre, precio, stock_real, stock_disponible)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [codigoGenerado, categoria, prod.material || "", prod.medida || "", prod.nombre || "", Number(prod.precio) || 0, stock, stock]
+        [
+          codigoGenerado,
+          categoria,
+          prod.material || "",
+          prod.medida || "",
+          prod.nombre || "",
+          Number(prod.precio) || 0,
+          stock,
+          stock,
+        ],
       );
       creados++;
     }
 
     await db.run("COMMIT");
-    res.json({ mensaje: `Se importaron ${creados} productos exitosamente al inventario.` });
+    res.json({
+      mensaje: `Se importaron ${creados} productos exitosamente al inventario.`,
+    });
   } catch (error) {
     await db.run("ROLLBACK");
     console.error(error);
-    res.status(500).json({ error: "Error al importar los productos masivamente." });
+    res
+      .status(500)
+      .json({ error: "Error al importar los productos masivamente." });
   }
 });
 
 app.put("/api/productos/aumento-masivo", async (req, res) => {
   const { ids, porcentaje } = req.body;
   if (!ids || ids.length === 0 || !porcentaje) {
-    return res.status(400).json({ error: "Faltan datos para el aumento masivo" });
+    return res
+      .status(400)
+      .json({ error: "Faltan datos para el aumento masivo" });
   }
   try {
     const multiplicador = 1 + porcentaje / 100;
     const placeholders = ids.map(() => "?").join(",");
     await db.run(
       `UPDATE Productos SET precio = ROUND(precio * ?, 2) WHERE id IN (${placeholders})`,
-      [multiplicador, ...ids]
+      [multiplicador, ...ids],
     );
     res.json({ mensaje: "Precios actualizados correctamente" });
   } catch (error) {
@@ -232,33 +274,48 @@ app.put("/api/productos/aumento-masivo", async (req, res) => {
 });
 
 app.put("/api/productos/:id", async (req, res) => {
-  const { codigo, categoria, material, medida, nombre, precio, stock_real } = req.body;
+  const { codigo, categoria, material, medida, nombre, precio, stock_real } =
+    req.body;
   const productoId = req.params.id;
 
   try {
     const productoViejo = await db.get(
       `SELECT stock_real, stock_disponible FROM Productos WHERE id = ?`,
-      [productoId]
+      [productoId],
     );
-    if (!productoViejo) return res.status(404).json({ error: "Producto no encontrado" });
+    if (!productoViejo)
+      return res.status(404).json({ error: "Producto no encontrado" });
 
     const diferencia = stock_real - productoViejo.stock_real;
     const nuevoStockDisponible = productoViejo.stock_disponible + diferencia;
 
     if (nuevoStockDisponible < 0) {
       return res.status(400).json({
-        error: "No podés reducir tanto el stock. Hay unidades de este producto en remitos activos.",
+        error:
+          "No podés reducir tanto el stock. Hay unidades de este producto en remitos activos.",
       });
     }
 
     await db.run(
       `UPDATE Productos SET codigo=?, categoria=?, material=?, medida=?, nombre=?, precio=?, stock_real=?, stock_disponible=? WHERE id=?`,
-      [codigo, categoria, material, medida, nombre, precio, stock_real, nuevoStockDisponible, productoId]
+      [
+        codigo,
+        categoria,
+        material,
+        medida,
+        nombre,
+        precio,
+        stock_real,
+        nuevoStockDisponible,
+        productoId,
+      ],
     );
     res.json({ mensaje: "Producto actualizado correctamente" });
   } catch (error: any) {
     if (error.code === "SQLITE_CONSTRAINT") {
-      res.status(400).json({ error: "El código ingresado ya pertenece a otro producto." });
+      res
+        .status(400)
+        .json({ error: "El código ingresado ya pertenece a otro producto." });
     } else {
       res.status(500).json({ error: "Error al actualizar el producto" });
     }
@@ -270,7 +327,12 @@ app.delete("/api/productos/:id", async (req, res) => {
     await db.run(`DELETE FROM Productos WHERE id = ?`, [req.params.id]);
     res.json({ mensaje: "Producto eliminado correctamente" });
   } catch (error: any) {
-    res.status(500).json({ error: "No se puede eliminar. El producto ya está incluido en un remito." });
+    res
+      .status(500)
+      .json({
+        error:
+          "No se puede eliminar. El producto ya está incluido en un remito.",
+      });
   }
 });
 
@@ -289,13 +351,16 @@ app.get("/api/vendedores", async (req, res) => {
 
 app.post("/api/vendedores", async (req, res) => {
   const { nombre, telefono } = req.body;
-  if (!nombre) return res.status(400).json({ error: "El nombre es obligatorio" });
+  if (!nombre)
+    return res.status(400).json({ error: "El nombre es obligatorio" });
   try {
     const result = await db.run(
       `INSERT INTO Vendedores (nombre, telefono) VALUES (?, ?)`,
-      [nombre, telefono || ""]
+      [nombre, telefono || ""],
     );
-    res.status(201).json({ mensaje: "Vendedor creado exitosamente", id: result.lastID });
+    res
+      .status(201)
+      .json({ mensaje: "Vendedor creado exitosamente", id: result.lastID });
   } catch (error) {
     res.status(500).json({ error: "Error interno al crear el vendedor" });
   }
@@ -304,7 +369,11 @@ app.post("/api/vendedores", async (req, res) => {
 app.put("/api/vendedores/:id", async (req, res) => {
   const { nombre, telefono } = req.body;
   try {
-    await db.run(`UPDATE Vendedores SET nombre=?, telefono=? WHERE id=?`, [nombre, telefono, req.params.id]);
+    await db.run(`UPDATE Vendedores SET nombre=?, telefono=? WHERE id=?`, [
+      nombre,
+      telefono,
+      req.params.id,
+    ]);
     res.json({ mensaje: "Vendedor actualizado correctamente" });
   } catch (error) {
     res.status(500).json({ error: "Error al actualizar el vendedor" });
@@ -316,7 +385,11 @@ app.delete("/api/vendedores/:id", async (req, res) => {
     await db.run(`DELETE FROM Vendedores WHERE id = ?`, [req.params.id]);
     res.json({ mensaje: "Vendedor eliminado correctamente" });
   } catch (error: any) {
-    res.status(500).json({ error: "No se puede eliminar. El vendedor ya tiene remitos asociados." });
+    res
+      .status(500)
+      .json({
+        error: "No se puede eliminar. El vendedor ya tiene remitos asociados.",
+      });
   }
 });
 
@@ -327,27 +400,31 @@ app.delete("/api/vendedores/:id", async (req, res) => {
 app.post("/api/remitos", async (req, res) => {
   const { vendedor_id, items } = req.body;
   if (!vendedor_id || !items || items.length === 0) {
-    return res.status(400).json({ error: "Faltan datos para crear el remito." });
+    return res
+      .status(400)
+      .json({ error: "Faltan datos para crear el remito." });
   }
   try {
     await db.run("BEGIN TRANSACTION");
     const resultRemito = await db.run(
       `INSERT INTO Remitos (vendedor_id, fecha_salida) VALUES (?, date('now'))`,
-      [vendedor_id]
+      [vendedor_id],
     );
     const remitoId = resultRemito.lastID;
     for (const item of items) {
       await db.run(
         `INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`,
-        [remitoId, item.producto_id, item.cantidad]
+        [remitoId, item.producto_id, item.cantidad],
       );
       await db.run(
         `UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id = ?`,
-        [item.cantidad, item.producto_id]
+        [item.cantidad, item.producto_id],
       );
     }
     await db.run("COMMIT");
-    res.status(201).json({ mensaje: "Remito generado con éxito", remito_id: remitoId });
+    res
+      .status(201)
+      .json({ mensaje: "Remito generado con éxito", remito_id: remitoId });
   } catch (error) {
     await db.run("ROLLBACK");
     res.status(500).json({ error: "Error interno al generar el remito" });
@@ -375,7 +452,7 @@ app.get("/api/remitos/:id/items", async (req, res) => {
        FROM Remitos_Items ri
        JOIN Productos p ON ri.producto_id = p.id
        WHERE ri.remito_id = ?`,
-      [req.params.id]
+      [req.params.id],
     );
     res.json(items);
   } catch (error) {
@@ -388,15 +465,23 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
   const { items, comision } = req.body;
   try {
     await db.run("BEGIN TRANSACTION");
-    await db.run(`UPDATE Remitos SET estado='Cerrado', comision=? WHERE id=?`, [comision || 0, remitoId]);
+    await db.run(`UPDATE Remitos SET estado='Cerrado', comision=? WHERE id=?`, [
+      comision || 0,
+      remitoId,
+    ]);
     for (const item of items) {
       await db.run(
         `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
-        [item.cantidad_devuelta, item.cantidad_vendida, remitoId, item.producto_id]
+        [
+          item.cantidad_devuelta,
+          item.cantidad_vendida,
+          remitoId,
+          item.producto_id,
+        ],
       );
       await db.run(
         `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
-        [item.cantidad_devuelta, item.cantidad_vendida, item.producto_id]
+        [item.cantidad_devuelta, item.cantidad_vendida, item.producto_id],
       );
     }
     await db.run("COMMIT");
@@ -410,20 +495,36 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
 app.put("/api/remitos/:id", async (req, res) => {
   const remitoId = req.params.id;
   const { vendedor_id, items } = req.body;
-  if (!items || items.length === 0) return res.status(400).json({ error: "El remito no puede estar vacío." });
+  if (!items || items.length === 0)
+    return res.status(400).json({ error: "El remito no puede estar vacío." });
   try {
     await db.run("BEGIN TRANSACTION");
     if (vendedor_id) {
-      await db.run(`UPDATE Remitos SET vendedor_id=? WHERE id=?`, [vendedor_id, remitoId]);
+      await db.run(`UPDATE Remitos SET vendedor_id=? WHERE id=?`, [
+        vendedor_id,
+        remitoId,
+      ]);
     }
-    const itemsViejos = await db.all(`SELECT producto_id, cantidad_entregada FROM Remitos_Items WHERE remito_id=?`, [remitoId]);
+    const itemsViejos = await db.all(
+      `SELECT producto_id, cantidad_entregada FROM Remitos_Items WHERE remito_id=?`,
+      [remitoId],
+    );
     for (const viejo of itemsViejos) {
-      await db.run(`UPDATE Productos SET stock_disponible = stock_disponible + ? WHERE id=?`, [viejo.cantidad_entregada, viejo.producto_id]);
+      await db.run(
+        `UPDATE Productos SET stock_disponible = stock_disponible + ? WHERE id=?`,
+        [viejo.cantidad_entregada, viejo.producto_id],
+      );
     }
     await db.run(`DELETE FROM Remitos_Items WHERE remito_id=?`, [remitoId]);
     for (const item of items) {
-      await db.run(`INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`, [remitoId, item.producto_id, item.cantidad]);
-      await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id=?`, [item.cantidad, item.producto_id]);
+      await db.run(
+        `INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`,
+        [remitoId, item.producto_id, item.cantidad],
+      );
+      await db.run(
+        `UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id=?`,
+        [item.cantidad, item.producto_id],
+      );
     }
     await db.run("COMMIT");
     res.json({ mensaje: "Remito editado y stock recalculado correctamente" });
@@ -436,10 +537,14 @@ app.put("/api/remitos/:id", async (req, res) => {
 // ============================================================
 // STATIC FILES Y FALLBACK ANGULAR
 // ============================================================
-app.use(express.static(path.join(__dirname, "..", "public", "frontend", "browser")));
+app.use(
+  express.static(path.join(__dirname, "..", "public", "frontend", "browser")),
+);
 
 app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "frontend", "browser", "index.html"));
+  res.sendFile(
+    path.join(__dirname, "..", "public", "frontend", "browser", "index.html"),
+  );
 });
 
 app.listen(PORT, "127.0.0.1", () => {
