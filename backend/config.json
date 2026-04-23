@@ -21,12 +21,12 @@
     "categoriaConMedida": "Cadenas",
     "medidas": ["40 cm", "45 cm", "50 cm", "55 cm", "60 cm"],
     "categorias": [
-      { "nombre": "Collares" },
-      { "nombre": "Cadenas" },
-      { "nombre": "Dijes" },
-      { "nombre": "Pulseras" },
-      { "nombre": "Aros" },
-      { "nombre": "Anillos" }
+      { "nombre": "Collares", "prefijo": "CO" },
+      { "nombre": "Cadenas", "prefijo": "CA" },
+      { "nombre": "Dijes", "prefijo": "DI" },
+      { "nombre": "Pulseras", "prefijo": "PU" },
+      { "nombre": "Aros", "prefijo": "AR" },
+      { "nombre": "Anillos", "prefijo": "AN" }
     ],
     "materiales": ["Acero", "Acero blanco", "Plata", "Cristal", "Otro"]
   }

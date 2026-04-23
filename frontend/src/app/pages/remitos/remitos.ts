@@ -302,20 +302,40 @@ export class RemitosComponent {
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading(),
     });
+
     setTimeout(() => {
       const elementId = tipo === 'remito' ? 'zona-impresion' : 'ticket-liquidacion';
       const element = document.getElementById(elementId);
+
       if (element) {
         html2canvas(element, { scale: 2 }).then((canvas) => {
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('p', 'mm', 'a4');
+
           const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+          let heightLeft = imgHeight;
+          let position = 0;
+
+          // Pegamos la imagen en la primer página
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+          heightLeft -= pageHeight;
+
+          // Si sobra imagen (heightLeft > 0), creamos hojas nuevas y desplazamos la foto hacia arriba (position negativa)
+          while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pageHeight;
+          }
+
           const nombreArchivo =
             tipo === 'remito'
               ? `Remito_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`
               : `Liquidacion_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`;
+
           pdf.save(nombreArchivo);
           Swal.close();
         });
