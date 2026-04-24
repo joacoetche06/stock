@@ -308,7 +308,11 @@ export class RemitosComponent {
       const element = document.getElementById(elementId);
 
       if (element) {
-        html2canvas(element, { scale: 2 }).then((canvas) => {
+        html2canvas(element, { 
+          scale: 2,
+          scrollY: 0,
+          windowHeight: element.scrollHeight 
+        }).then((canvas) => {
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('p', 'mm', 'a4');
 

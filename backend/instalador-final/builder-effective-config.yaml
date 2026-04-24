@@ -1,7 +1,7 @@
 directories:
   output: instalador-final
   buildResources: build
-appId: com.joyeriaadri.stock
+appId: com.joaco.chicas
 productName: Chicas de Buenos Aires
 files:
   - filter:
@@ -9,9 +9,13 @@ files:
       - public/**/*
       - main.js
       - package.json
+      - config.json
+extraResources:
+  - filter:
+      - app-adri.sqlite
 win:
   target: nsis
-  icon: public/logo.png
+  icon: public/frontend/browser/logo.ico
 nsis:
   oneClick: false
   perMachine: false

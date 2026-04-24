@@ -1,5 +1,5 @@
 {
-  "name": "stock-template",
+  "name": "chicas-de-buenos-aires",
   "version": "1.1.0",
   "main": "main.js",
   "scripts": {
@@ -10,8 +10,8 @@
     "empaquetar": "electron-builder --win"
   },
   "build": {
-    "appId": "com.joaco.stock",
-    "productName": "Sistema de Inventario",
+    "appId": "com.joaco.chicas",
+    "productName": "Chicas de Buenos Aires",
     "directories": {
       "output": "instalador-final"
     },
@@ -19,7 +19,11 @@
       "dist/**/*",
       "public/**/*",
       "main.js",
-      "package.json"
+      "package.json",
+      "config.json"
+    ],
+    "extraResources": [
+      "app-adri.sqlite"
     ],
     "win": {
       "target": "nsis",
@@ -29,14 +33,14 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Sistema de Inventario"
+      "shortcutName": "Chicas de Buenos Aires"
     }
   },
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
