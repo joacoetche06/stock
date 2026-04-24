@@ -1,0 +1,29 @@
+D	README.md
+D	backend/config.json
+D	backend/database.sqlite
+M	backend/dist/server.js
+M	backend/package-lock.json
+M	backend/package.json
+M	backend/public/frontend/browser/index.html
+R071	backend/public/frontend/browser/main-GUDKDGGY.js	backend/public/frontend/browser/main-JCJULRR4.js
+R062	backend/public/frontend/browser/styles-BOFG43S4.css	backend/public/frontend/browser/styles-GTWBJJI5.css
+M	backend/src/server.ts
+D	backend/stock-app.sqlite
+M	frontend/angular.json
+M	frontend/package-lock.json
+M	frontend/package.json
+M	frontend/public/logo.ico
+A	frontend/public/logo.png
+M	frontend/src/app/app.config.ts
+M	frontend/src/app/app.html
+M	frontend/src/app/app.ts
+M	frontend/src/app/pages/productos/productos.html
+M	frontend/src/app/pages/productos/productos.ts
+M	frontend/src/app/pages/remitos/remitos.html
+M	frontend/src/app/pages/remitos/remitos.ts
+M	frontend/src/app/pages/vendedores/vendedores.html
+M	frontend/src/app/pages/vendedores/vendedores.ts
+D	frontend/src/app/services/config.service.ts
+A	frontend/src/assets/logo.jpg
+M	frontend/src/index.html
+M	frontend/src/main.ts

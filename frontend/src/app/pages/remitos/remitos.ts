@@ -295,6 +295,64 @@ export class RemitosComponent {
     }
   }
 
+  agregarAlCarritoConCantidad(producto: any, cantidadStr: string, event: Event) {
+    event.stopPropagation(); // Evita que se cierre el menú desplegable
+    const cantidadAInsertar = parseInt(cantidadStr, 10);
+
+    // Validamos que no ponga letras o números negativos
+    if (isNaN(cantidadAInsertar) || cantidadAInsertar < 1) {
+      return;
+    }
+
+    const items = this.itemsCarrito();
+    const existe = items.find((item) => item.producto_id === producto.id);
+
+    // Calculamos cuánto habría en total en el carrito si sumamos esto
+    const cantidadActualEnCarrito = existe ? existe.cantidad : 0;
+    const nuevaCantidadTotal = cantidadActualEnCarrito + cantidadAInsertar;
+
+    // Validamos el stock
+    if (nuevaCantidadTotal > producto.stock_disponible) {
+      Swal.fire(
+        'Stock insuficiente',
+        `Solo hay ${producto.stock_disponible} disponibles en total. Ya tenés ${cantidadActualEnCarrito} en el remito.`,
+        'warning',
+      );
+      return;
+    }
+
+    if (existe) {
+      // Si ya estaba en el carrito, le sumamos la nueva cantidad
+      const nuevosItems = items.map((item) =>
+        item.producto_id === producto.id ? { ...item, cantidad: nuevaCantidadTotal } : item,
+      );
+      this.itemsCarrito.set(nuevosItems);
+    } else {
+      // Si no estaba, lo agregamos por primera vez
+      this.itemsCarrito.set([
+        ...items,
+        {
+          producto_id: producto.id,
+          codigo: producto.codigo,
+          nombre: producto.nombre,
+          cantidad: cantidadAInsertar,
+          stock_maximo: producto.stock_disponible,
+          precio: producto.precio,
+        },
+      ]);
+    }
+
+    // Mini notificación para que sepa que se agregó sin cerrarle la búsqueda
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Agregaste ${cantidadAInsertar}x ${producto.codigo}`,
+      showConfirmButton: false,
+      timer: 1500,
+    });
+  }
+
   imprimirVistaActual() {
     const tipo = this.vistaDetalleActual() === 'entrega' ? 'remito' : 'ticket';
     Swal.fire({
@@ -308,7 +366,11 @@ export class RemitosComponent {
       const element = document.getElementById(elementId);
 
       if (element) {
-        html2canvas(element, { scale: 2 }).then((canvas) => {
+        html2canvas(element, {
+          scale: 2,
+          scrollY: 0,
+          windowHeight: element.scrollHeight,
+        }).then((canvas) => {
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('p', 'mm', 'a4');
 
