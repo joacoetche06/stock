@@ -88,7 +88,7 @@ table {
   width: 100%;
   background: var(--color-blanco);
   border-radius: 10px; /* Bordes un pelín más redondeados */
-  overflow: hidden;
+  /* overflow: hidden; */
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* Sombra un poco más amplia y suave */
   margin-bottom: 25px; /* Más separación con lo que haya abajo */
 }

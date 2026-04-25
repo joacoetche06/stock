@@ -571,6 +571,16 @@ app.put("/api/remitos/:id", async (req, res) => {
   }
 });
 
+// RUTA ESPÍA PARA VER LA BASE DE DATOS DIRECTO
+app.get("/api/debug", async (req, res) => {
+  try {
+    const datos = await db.all("SELECT * FROM Remitos_Items");
+    res.json(datos);
+  } catch (e) {
+    res.json({ error: "error" });
+  }
+});
+
 // ============================================================
 // STATIC FILES Y FALLBACK ANGULAR
 // ============================================================
