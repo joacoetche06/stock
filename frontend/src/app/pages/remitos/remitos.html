@@ -51,14 +51,12 @@
       </div>
     </div>
 
-    <div style="margin-bottom: 25px">
+    <div style="margin-bottom: 25px; max-width: 500px;">
       <label style="font-weight: bold; display: block; margin-bottom: 5px">
         2. Buscar y Seleccionar {{ nombreProductoPlural | titlecase }}:
       </label>
-      <div
-        style="position: relative; width: 100%; max-width: 500px"
-        (click)="$event.stopPropagation()"
-      >
+
+      <div style="width: 100%; margin-bottom: 20px" (click)="$event.stopPropagation()">
         <input
           type="text"
           [placeholder]="'🔍 Buscar ' + nombreProducto + ' (código, nombre, material)...'"
@@ -69,10 +67,18 @@
           style="width: 100%; box-sizing: border-box; font-size: 1.1em"
           autocomplete="off"
         />
+        
         <div
           *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
-          class="select-options"
-          style="top: 100%; max-height: 350px; overflow-y: auto"
+          style="
+            background: #fff;
+            border: 2px solid var(--color-principal);
+            border-radius: 6px;
+            margin-top: 8px;
+            max-height: 350px;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          "
         >
           <div
             *ngFor="let p of productosDisponibles()"
@@ -83,7 +89,7 @@
               align-items: center;
               border-bottom: 1px solid #f8f9fa;
               padding: 10px 15px;
-              gap: 15px;
+              gap: 10px;
             "
           >
             <label
@@ -93,7 +99,8 @@
                 gap: 12px;
                 cursor: pointer;
                 margin: 0;
-                flex-grow: 1;
+                flex: 1 1 auto;
+                min-width: 0;
               "
             >
               <input
@@ -101,48 +108,71 @@
                 [checked]="estaEnCarrito(p.id!)"
                 (change)="toggleProductoCarrito(p, $event)"
                 style="
-                  width: 20px;
-                  height: 20px;
+                  width: 18px;
+                  height: 18px;
                   cursor: pointer;
                   accent-color: var(--color-principal);
+                  flex-shrink: 0;
                 "
               />
-              <span style="font-size: 1.05em">
-                <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
+              <div style="display: flex; flex-direction: column; overflow: hidden;">
+                <span style="font-size: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
+                </span>
                 <span
                   *ngIf="p.material"
-                  style="color: #6c757d; font-size: 0.9em; font-style: italic"
+                  style="color: #6c757d; font-size: 0.85em; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                 >
-                  ({{ p.material
-                  }}<span *ngIf="p.medida" style="font-weight: bold; color: var(--color-principal)">
-                    - {{ p.medida }}</span
-                  >)
+                  {{ p.material }}<span *ngIf="p.medida" style="font-weight: bold; color: var(--color-principal)"> - {{ p.medida }}</span>
                 </span>
-              </span>
+              </div>
             </label>
 
             <div
-              style="display: flex; align-items: center; gap: 15px"
+              style="display: flex; align-items: center; gap: 15px; flex: 0 0 auto;"
               (click)="$event.stopPropagation()"
             >
-              <span style="color: #28a745; font-size: 0.9em; font-weight: bold; white-space: nowrap"
-                >Disp: {{ p.stock_disponible }}</span
-              >
+              <span
+                style="
+                  color: #28a745;
+                  font-size: 0.9em;
+                  font-weight: bold;
+                  white-space: nowrap;
+                  min-width: 55px;
+                  text-align: right;
+                "
+              >Disp: {{ p.stock_disponible }}</span>
 
-              <div style="display: flex; gap: 5px; align-items: center">
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  background: #fff;
+                  padding: 3px;
+                  border-radius: 6px;
+                  border: 1px solid #ced4da;
+                "
+              >
                 <input
                   type="number"
                   #inputCant
                   value="1"
                   min="1"
                   [max]="p.stock_disponible"
-                  class="input-form"
-                  style="width: 60px; padding: 4px; text-align: center; height: 32px"
+                  style="
+                    width: 45px;
+                    border: none;
+                    text-align: center;
+                    font-weight: bold;
+                    outline: none;
+                    background: transparent;
+                    height: 26px;
+                  "
                 />
                 <button
                   type="button"
                   class="btn btn-principal"
-                  style="padding: 0 12px; height: 32px; font-size: 12px; margin: 0"
+                  style="padding: 0 12px; height: 28px; font-size: 12px; margin: 0; border-radius: 4px;"
                   (click)="agregarAlCarritoConCantidad(p, inputCant.value, $event)"
                 >
                   Sumar
@@ -151,67 +181,68 @@
             </div>
           </div>
         </div>
-        <div
-          *ngIf="itemsCarrito().length > 0"
-          style="
-            background: #fdfaf9;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #f4d1d1;
-            margin-bottom: 20px;
-          "
-        >
-          <h4 style="margin-top: 0; color: var(--color-principal)">Detalle de entrega:</h4>
-          <ul style="padding-left: 0; list-style: none">
-            <li
-              *ngFor="let item of itemsCarrito(); let i = index"
-              style="
-                margin-bottom: 10px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 5px;
-              "
-            >
-              <input
-                type="number"
-                [(ngModel)]="item.cantidad"
-                min="1"
-                [max]="item.stock_maximo"
-                class="input-form"
-                style="width: 65px; padding: 5px; font-weight: bold; text-align: center"
-              />
-              <span style="flex-grow: 1">
-                <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
-                <span style="font-size: 0.85em; color: #6c757d"
-                  >(Máx: {{ item.stock_maximo }})</span
-                >
-              </span>
-              <button
-                (click)="quitarDelRemito(i)"
-                class="btn btn-eliminar"
-                style="padding: 4px 8px; font-size: 0.85em"
-              >
-                Quitar
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        <div style="display: flex; gap: 10px">
-          <button
-            *ngIf="remitoEnEdicion()"
-            (click)="cancelarEdicionRemito()"
-            class="btn btn-secundario"
-            style="width: 30%"
+      </div>
+      <div
+        *ngIf="itemsCarrito().length > 0"
+        style="
+          background: #fdfaf9;
+          padding: 15px;
+          border-radius: 8px;
+          border: 1px solid #f4d1d1;
+          margin-bottom: 20px;
+        "
+      >
+        <h4 style="margin-top: 0; color: var(--color-principal)">Detalle de entrega:</h4>
+        <ul style="padding-left: 0; list-style: none; margin: 0;">
+          <li
+            *ngFor="let item of itemsCarrito(); let i = index"
+            style="
+              margin-bottom: 10px;
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 5px;
+            "
           >
-            ❌ Cancelar
-          </button>
-          <button (click)="guardarRemitoFinal()" class="btn btn-exito" style="flex-grow: 1">
-            💾 {{ remitoEnEdicion() ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y GUARDAR REMITO' }}
-          </button>
-        </div>
+            <input
+              type="number"
+              [(ngModel)]="item.cantidad"
+              min="1"
+              [max]="item.stock_maximo"
+              class="input-form"
+              style="width: 65px; padding: 5px; font-weight: bold; text-align: center"
+            />
+            <span style="flex-grow: 1">
+              <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
+              <span style="font-size: 0.85em; color: #6c757d"
+                >(Máx: {{ item.stock_maximo }})</span
+              >
+            </span>
+            <button
+              (click)="quitarDelRemito(i)"
+              class="btn btn-eliminar"
+              style="padding: 4px 8px; font-size: 0.85em"
+            >
+              Quitar
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 10px">
+        <button
+          *ngIf="remitoEnEdicion()"
+          (click)="cancelarEdicionRemito()"
+          class="btn btn-secundario"
+          style="width: 30%"
+        >
+          ❌ Cancelar
+        </button>
+        <button (click)="guardarRemitoFinal()" class="btn btn-exito" style="flex-grow: 1">
+          💾 {{ remitoEnEdicion() ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y GUARDAR REMITO' }}
+        </button>
+
       </div>
 
       <!-- FILTRO HISTORIAL -->
@@ -611,28 +642,13 @@
               >
                 <thead style="background: #f8f9fa">
                   <tr>
-                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd">Código</th>
-                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd">
-                      {{ nombreProducto | titlecase }}
-                    </th>
-                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd">Material</th>
-                    <th style="padding: 8px; text-align: right; border: 1px solid #ddd">Precio</th>
-                    <th
-                      style="
-                        padding: 8px;
-                        text-align: center;
-                        border: 1px solid #ddd;
-                        background: #e9ecef;
-                      "
-                    >
-                      Entregada
-                    </th>
-                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd">
-                      Vendido
-                    </th>
-                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd">
-                      Devuelto
-                    </th>
+                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 12%">Código</th>
+                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 40%">{{ nombreProducto | titlecase }}</th>
+                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 15%">Material</th>
+                    <th style="padding: 8px; text-align: right; border: 1px solid #ddd; width: 11%">Precio</th>
+                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd; background: #e9ecef; width: 8%">Entreg.</th>
+                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 7%">Vend.</th>
+                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 7%">Dev.</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -760,11 +776,11 @@
           >
             <thead>
               <tr style="border-bottom: 2px solid #000">
-                <th style="text-align: center; padding: 8px 0">Cant.</th>
-                <th style="text-align: center; padding: 8px 0">{{ nombreProducto | titlecase }}</th>
-                <th style="text-align: center; padding: 8px 0">Precio original</th>
-                <th style="text-align: center; padding: 8px 0">Comisión</th>
-                <th style="text-align: center; padding: 8px 0">Valor a liquidar</th>
+                <th style="text-align: center; padding: 8px 0; width: 10%">Cant.</th>
+                <th style="text-align: center; padding: 8px 0; width: 45%">{{ nombreProducto | titlecase }}</th>
+                <th style="text-align: center; padding: 8px 0; width: 15%">Precio original</th>
+                <th style="text-align: center; padding: 8px 0; width: 15%">Comisión</th>
+                <th style="text-align: center; padding: 8px 0; width: 15%">Valor a liquidar</th>
               </tr>
             </thead>
             <tbody>

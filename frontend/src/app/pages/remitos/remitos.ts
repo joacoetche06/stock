@@ -366,11 +366,21 @@ export class RemitosComponent {
       const element = document.getElementById(elementId);
 
       if (element) {
+        // 🪄 EL TRUCO MAGICO: Le damos un ancho fijo de hoja A4 antes de la foto
+        const originalWidth = element.style.width;
+        const originalPadding = element.style.padding;
+        
+        element.style.width = '1000px';
+        element.style.padding = '40px'; // Un poco de margen interno para que respire
+
         html2canvas(element, {
           scale: 2,
-          scrollY: 0,
-          windowHeight: element.scrollHeight,
+          scrollY: -window.scrollY, // Evita recortes si la pantalla está scrolleada
         }).then((canvas) => {
+          // Restauramos el diseño a la normalidad al instante
+          element.style.width = originalWidth;
+          element.style.padding = originalPadding;
+
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('p', 'mm', 'a4');
 
@@ -381,12 +391,12 @@ export class RemitosComponent {
           let heightLeft = imgHeight;
           let position = 0;
 
-          // Pegamos la imagen en la primer página
+          // Pegamos la primer hoja
           pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
           heightLeft -= pageHeight;
 
-          // Si sobra imagen (heightLeft > 0), creamos hojas nuevas y desplazamos la foto hacia arriba (position negativa)
-          while (heightLeft >= 0) {
+          // Hojas siguientes (Paginación)
+          while (heightLeft > 0) {
             position = heightLeft - imgHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
