@@ -313,3 +313,39 @@ select.input-form:-moz-focusring {
 .option-placeholder {
   color: #6c757d;
 }
+
+/* --- TOOLTIP RADAR STOCK --- */
+.contenedor-tooltip .tooltip-stock {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 120%; /* Aparece justo arriba del número */
+  left: 50%;
+  transform: translateX(-50%); /* Centrado */
+  background-color: #343a40;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  width: max-content;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transition: opacity 0.2s, visibility 0.2s, bottom 0.2s;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.contenedor-tooltip .tooltip-stock::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #343a40 transparent transparent transparent;
+}
+
+.contenedor-tooltip:hover .tooltip-stock {
+  visibility: visible;
+  opacity: 1;
+  bottom: 140%; /* Efecto de que flota un poquito para arriba */
+}

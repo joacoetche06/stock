@@ -5,6 +5,18 @@ import { open } from "sqlite";
 import path from "path";
 import fs from "fs";
 
+interface Product {
+  id: number;
+  codigo: string;
+  categoria: string;
+  material: string;
+  medida: string;
+  nombre: string;
+  precio: number;
+  stock_real: number;
+  stock_disponible: number;
+}
+
 const app = express();
 
 // ============================================================
@@ -94,6 +106,7 @@ async function inicializarDB() {
     const migraciones = [
       `ALTER TABLE Productos ADD COLUMN medida TEXT;`,
       `ALTER TABLE Remitos ADD COLUMN comision REAL DEFAULT 0;`,
+      `ALTER TABLE Remitos_Items ADD COLUMN precio REAL DEFAULT 0;` // <-- NUEVA
     ];
     for (const m of migraciones) {
       try {
@@ -128,8 +141,31 @@ app.get("/api/status", (req, res) => {
 
 app.get("/api/productos", async (req, res) => {
   try {
-    const productos = await db.all("SELECT * FROM Productos");
-    res.json(productos);
+    const productos: Product[] = await db.all("SELECT * FROM Productos");
+    
+    // Buscamos quién tiene qué cosa en remitos pendientes
+    const distribuciones = await db.all(`
+      SELECT ri.producto_id, (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as cantidad, v.nombre as vendedor
+      FROM Remitos_Items ri
+      JOIN Remitos r ON ri.remito_id = r.id
+      JOIN Vendedores v ON r.vendedor_id = v.id
+      WHERE r.estado = 'Pendiente' AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
+    `);
+
+    // Lo agrupamos por producto
+    const distMap: any = {};
+    for(const d of distribuciones) {
+      if(!distMap[d.producto_id]) distMap[d.producto_id] = [];
+      distMap[d.producto_id].push({ vendedor: d.vendedor, cantidad: d.cantidad });
+    }
+
+    // Se lo metemos al producto final
+    const response = productos.map(p => ({
+      ...p,
+      distribucion: distMap[p.id] || []
+    }));
+
+    res.json(response);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener los productos" });
   }
@@ -413,8 +449,8 @@ app.post("/api/remitos", async (req, res) => {
     const remitoId = resultRemito.lastID;
     for (const item of items) {
       await db.run(
-        `INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`,
-        [remitoId, item.producto_id, item.cantidad],
+        `INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada, precio) VALUES (?, ?, ?, ?)`,
+        [remitoId, item.producto_id, item.cantidad, item.precio],
       );
       await db.run(
         `UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id = ?`,
@@ -446,9 +482,10 @@ app.get("/api/remitos", async (req, res) => {
 
 app.get("/api/remitos/:id/items", async (req, res) => {
   try {
-    const items = await db.all(
-      `SELECT ri.producto_id, ri.cantidad_entregada, ri.cantidad_vendida, ri.cantidad_devuelta,
-              p.nombre, p.codigo, p.categoria, p.material, p.precio
+   const items = await db.all(
+      `SELECT ri.producto_id, ri.cantidad_entregada, ri.cantidad_vendida, ri.cantidad_devuelta, 
+              CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio,
+              p.nombre, p.codigo, p.categoria, p.material
        FROM Remitos_Items ri
        JOIN Productos p ON ri.producto_id = p.id
        WHERE ri.remito_id = ?`,
@@ -518,8 +555,8 @@ app.put("/api/remitos/:id", async (req, res) => {
     await db.run(`DELETE FROM Remitos_Items WHERE remito_id=?`, [remitoId]);
     for (const item of items) {
       await db.run(
-        `INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`,
-        [remitoId, item.producto_id, item.cantidad],
+        `INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada, precio) VALUES (?, ?, ?, ?)`,
+        [remitoId, item.producto_id, item.cantidad, item.precio],
       );
       await db.run(
         `UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id=?`,

@@ -4,14 +4,15 @@ import { Observable } from 'rxjs';
 
 export interface Producto {
   id?: number;
-  codigo?: string; // Le ponemos el '?' porque ahora el código no es obligatorio al enviarlo
+  codigo?: string; 
   categoria?: string;
   material?: string;
-  medida?: string; // <-- NUEVO
+  medida?: string; 
   nombre: string;
   precio: number;
   stock_real: number;
   stock_disponible: number;
+  distribucion?: any[]; // <--- AGREGAR ESTA LÍNEA
 }
 
 @Injectable({

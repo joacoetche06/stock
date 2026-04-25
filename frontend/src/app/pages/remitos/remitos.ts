@@ -168,7 +168,11 @@ export class RemitosComponent {
 
     const payload = {
       vendedor_id: vendId,
-      items: items.map((item) => ({ producto_id: item.producto_id, cantidad: item.cantidad })),
+      items: items.map((item) => ({ 
+        producto_id: item.producto_id, 
+        cantidad: item.cantidad,
+        precio: item.precio // <-- FUNDAMENTAL QUE SE GUARDE
+      })),
     };
 
     const operacion = remitoEdit

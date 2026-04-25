@@ -162,8 +162,24 @@
         <td>{{ prod.nombre }}</td>
         <td>$ {{ prod.precio }}</td>
         <td style="color: #007bff; text-align: center; font-size: 1.1em"><strong>{{ prod.stock_real }}</strong></td>
-        <td style="color: #28a745; text-align: center; font-size: 1.1em"><strong>{{ prod.stock_disponible }}</strong></td>
-        <td style="display: flex; gap: 5px">
+        <td style="color: #28a745; text-align: center; font-size: 1.1em">
+          <div [ngClass]="{'contenedor-tooltip': prod.distribucion && prod.distribucion.length > 0 }"
+            [style.cursor]="(prod.distribucion && prod.distribucion.length > 0) ? 'help' : 'default'"
+            style="position: relative; display: inline-block;">
+            
+            <strong>{{ prod.stock_disponible }}</strong>
+            
+            <div class="tooltip-stock" *ngIf="prod.distribucion && prod.distribucion.length > 0">
+              <strong style="display:block; border-bottom: 1px solid #666; margin-bottom: 5px; padding-bottom: 3px; font-size: 0.9em; text-align: left; color: #f8f9fa;">
+                En calle:
+              </strong>
+              <div *ngFor="let d of prod.distribucion" style="font-size: 0.85em; text-align: left; white-space: nowrap; color: white;">
+                {{ d.vendedor }}: <strong style="color: var(--color-secundario)">{{ d.cantidad }}</strong>
+              </div>
+            </div>
+
+          </div>
+        </td>        <td style="display: flex; gap: 5px">
           <button (click)="editar(prod)" class="btn btn-editar" style="padding: 6px 10px">✏️ Editar</button>
           <button (click)="eliminar(prod.id!)" class="btn btn-eliminar" style="padding: 6px 10px">🗑️ Eliminar</button>
         </td>
