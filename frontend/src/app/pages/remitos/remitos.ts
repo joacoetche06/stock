@@ -367,7 +367,7 @@ export class RemitosComponent {
   }
 
   imprimirVistaActual() {
-    const tipo = this.vistaDetalleActual() === 'entrega' ? 'remito' : 'ticket';
+    const vista = this.vistaDetalleActual(); // Puede ser 'entrega', 'liquidacion' o 'pagos'
     Swal.fire({
       title: 'Generando PDF...',
       allowOutsideClick: false,
@@ -375,24 +375,41 @@ export class RemitosComponent {
     });
 
     setTimeout(() => {
-      const elementId = tipo === 'remito' ? 'zona-impresion' : 'ticket-liquidacion';
+      let elementId = '';
+      let prefijoArchivo = '';
+
+      // Identificamos qué pestaña está abierta
+      if (vista === 'entrega') {
+        elementId = 'zona-impresion';
+        prefijoArchivo = 'Remito';
+      } else if (vista === 'liquidacion') {
+        elementId = 'ticket-liquidacion';
+        prefijoArchivo = 'Liquidacion';
+      } else if (vista === 'pagos') {
+        elementId = 'registro-pagos';
+        prefijoArchivo = 'Historial_Pagos';
+      }
+
       const element = document.getElementById(elementId);
 
       if (element) {
-        // 🪄 EL TRUCO MAGICO: Le damos un ancho fijo de hoja A4 antes de la foto
+        // 🪄 EL TRUCO MAGICO: Forzamos el ancho para que la foto salga en calidad A4
         const originalWidth = element.style.width;
         const originalPadding = element.style.padding;
+        const originalOverflow = element.style.overflowX;
         
         element.style.width = '1000px';
-        element.style.padding = '40px'; // Un poco de margen interno para que respire
+        element.style.padding = '40px'; 
+        element.style.overflowX = 'visible'; // Evita que se corte la foto
 
         html2canvas(element, {
           scale: 2,
-          scrollY: -window.scrollY, // Evita recortes si la pantalla está scrolleada
+          scrollY: -window.scrollY, 
         }).then((canvas) => {
-          // Restauramos el diseño a la normalidad al instante
+          // Restauramos la vista al instante
           element.style.width = originalWidth;
           element.style.padding = originalPadding;
+          element.style.overflowX = originalOverflow;
 
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('p', 'mm', 'a4');
@@ -416,10 +433,7 @@ export class RemitosComponent {
             heightLeft -= pageHeight;
           }
 
-          const nombreArchivo =
-            tipo === 'remito'
-              ? `Remito_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`
-              : `Liquidacion_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`;
+          const nombreArchivo = `${prefijoArchivo}_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`;
 
           pdf.save(nombreArchivo);
           Swal.close();
