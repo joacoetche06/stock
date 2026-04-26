@@ -79,11 +79,22 @@ async function inicializarDB() {
         FOREIGN KEY(remito_id) REFERENCES Remitos(id),
         FOREIGN KEY(producto_id) REFERENCES Productos(id)
       );
+
+      CREATE TABLE IF NOT EXISTS Pagos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        remito_id INTEGER,
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL,
+        FOREIGN KEY(remito_id) REFERENCES Remitos(id)
+      );
     `);
         // Migraciones seguras (ignoran error si la columna ya existe)
         const migraciones = [
             `ALTER TABLE Productos ADD COLUMN medida TEXT;`,
             `ALTER TABLE Remitos ADD COLUMN comision REAL DEFAULT 0;`,
+            `ALTER TABLE Remitos_Items ADD COLUMN precio REAL DEFAULT 0;`, // <-- NUEVA
+            `ALTER TABLE Remitos ADD COLUMN total_rendir REAL DEFAULT 0;`, // <-- NUEVA
+            `ALTER TABLE Remitos ADD COLUMN abonado REAL DEFAULT 0;`, // <-- NUEVA
         ];
         for (const m of migraciones) {
             try {
@@ -116,7 +127,27 @@ app.get("/api/status", (req, res) => {
 app.get("/api/productos", async (req, res) => {
     try {
         const productos = await db.all("SELECT * FROM Productos");
-        res.json(productos);
+        // Buscamos quién tiene qué cosa en remitos pendientes
+        const distribuciones = await db.all(`
+      SELECT ri.producto_id, (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as cantidad, v.nombre as vendedor
+      FROM Remitos_Items ri
+      JOIN Remitos r ON ri.remito_id = r.id
+      JOIN Vendedores v ON r.vendedor_id = v.id
+      WHERE r.estado = 'Pendiente' AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
+    `);
+        // Lo agrupamos por producto
+        const distMap = {};
+        for (const d of distribuciones) {
+            if (!distMap[d.producto_id])
+                distMap[d.producto_id] = [];
+            distMap[d.producto_id].push({ vendedor: d.vendedor, cantidad: d.cantidad });
+        }
+        // Se lo metemos al producto final
+        const response = productos.map(p => ({
+            ...p,
+            distribucion: distMap[p.id] || []
+        }));
+        res.json(response);
     }
     catch (error) {
         res.status(500).json({ error: "Error al obtener los productos" });
@@ -350,7 +381,7 @@ app.post("/api/remitos", async (req, res) => {
         const resultRemito = await db.run(`INSERT INTO Remitos (vendedor_id, fecha_salida) VALUES (?, date('now'))`, [vendedor_id]);
         const remitoId = resultRemito.lastID;
         for (const item of items) {
-            await db.run(`INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`, [remitoId, item.producto_id, item.cantidad]);
+            await db.run(`INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada, precio) VALUES (?, ?, ?, ?)`, [remitoId, item.producto_id, item.cantidad, item.precio]);
             await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id = ?`, [item.cantidad, item.producto_id]);
         }
         await db.run("COMMIT");
@@ -366,7 +397,7 @@ app.post("/api/remitos", async (req, res) => {
 app.get("/api/remitos", async (req, res) => {
     try {
         const remitos = await db.all(`
-      SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, v.nombre as vendedor
+      SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, r.total_rendir, r.abonado, v.nombre as vendedor
       FROM Remitos r
       JOIN Vendedores v ON r.vendedor_id = v.id
     `);
@@ -378,8 +409,9 @@ app.get("/api/remitos", async (req, res) => {
 });
 app.get("/api/remitos/:id/items", async (req, res) => {
     try {
-        const items = await db.all(`SELECT ri.producto_id, ri.cantidad_entregada, ri.cantidad_vendida, ri.cantidad_devuelta,
-              p.nombre, p.codigo, p.categoria, p.material, p.precio
+        const items = await db.all(`SELECT ri.producto_id, ri.cantidad_entregada, ri.cantidad_vendida, ri.cantidad_devuelta, 
+              CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio,
+              p.nombre, p.codigo, p.categoria, p.material
        FROM Remitos_Items ri
        JOIN Productos p ON ri.producto_id = p.id
        WHERE ri.remito_id = ?`, [req.params.id]);
@@ -391,11 +423,13 @@ app.get("/api/remitos/:id/items", async (req, res) => {
 });
 app.put("/api/remitos/:id/cerrar", async (req, res) => {
     const remitoId = req.params.id;
-    const { items, comision } = req.body;
+    const { items, comision, total_rendir } = req.body; // <-- AHORA RECIBE EL TOTAL
     try {
         await db.run("BEGIN TRANSACTION");
-        await db.run(`UPDATE Remitos SET estado='Cerrado', comision=? WHERE id=?`, [
+        // Guardamos el total_rendir y reseteamos el abonado a 0
+        await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [
             comision || 0,
+            total_rendir || 0,
             remitoId,
         ]);
         for (const item of items) {
@@ -413,6 +447,36 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
     catch (error) {
         await db.run("ROLLBACK");
         res.status(500).json({ error: "Error al cerrar el remito" });
+    }
+});
+// REGISTRAR PAGO PARCIAL A UN REMITO CERRADO
+app.put("/api/remitos/:id/pagar", async (req, res) => {
+    const remitoId = req.params.id;
+    const { monto } = req.body;
+    if (!monto || monto <= 0)
+        return res.status(400).json({ error: "Monto inválido" });
+    try {
+        await db.run("BEGIN TRANSACTION");
+        // 1. Sumamos al total abonado
+        await db.run(`UPDATE Remitos SET abonado = abonado + ? WHERE id=?`, [monto, remitoId]);
+        // 2. Guardamos el registro histórico del pago con fecha y hora
+        await db.run(`INSERT INTO Pagos (remito_id, monto, fecha) VALUES (?, ?, ?)`, [remitoId, monto, new Date().toISOString()]);
+        await db.run("COMMIT");
+        res.json({ mensaje: "Pago registrado y guardado en el historial" });
+    }
+    catch (error) {
+        await db.run("ROLLBACK");
+        res.status(500).json({ error: "Error al registrar el pago" });
+    }
+});
+// OBTENER HISTORIAL DE PAGOS DE UN REMITO
+app.get("/api/remitos/:id/pagos", async (req, res) => {
+    try {
+        const pagos = await db.all(`SELECT * FROM Pagos WHERE remito_id = ? ORDER BY fecha DESC`, [req.params.id]);
+        res.json(pagos);
+    }
+    catch (error) {
+        res.status(500).json({ error: "Error al obtener los pagos" });
     }
 });
 app.put("/api/remitos/:id", async (req, res) => {
@@ -434,7 +498,7 @@ app.put("/api/remitos/:id", async (req, res) => {
         }
         await db.run(`DELETE FROM Remitos_Items WHERE remito_id=?`, [remitoId]);
         for (const item of items) {
-            await db.run(`INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada) VALUES (?, ?, ?)`, [remitoId, item.producto_id, item.cantidad]);
+            await db.run(`INSERT INTO Remitos_Items (remito_id, producto_id, cantidad_entregada, precio) VALUES (?, ?, ?, ?)`, [remitoId, item.producto_id, item.cantidad, item.precio]);
             await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id=?`, [item.cantidad, item.producto_id]);
         }
         await db.run("COMMIT");
@@ -443,6 +507,16 @@ app.put("/api/remitos/:id", async (req, res) => {
     catch (error) {
         await db.run("ROLLBACK");
         res.status(500).json({ error: "Error al editar el remito" });
+    }
+});
+// RUTA ESPÍA PARA VER LA BASE DE DATOS DIRECTO
+app.get("/api/debug", async (req, res) => {
+    try {
+        const datos = await db.all("SELECT * FROM Remitos_Items");
+        res.json(datos);
+    }
+    catch (e) {
+        res.json({ error: "error" });
     }
 });
 // ============================================================
