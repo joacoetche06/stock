@@ -309,46 +309,42 @@
           </tr>
         </thead>
         <tbody>
-          <tr
-            *ngFor="let r of remitosFiltrados()"
-            style="text-align: center; border-bottom: 1px solid #eee"
-          >
+          <tr *ngFor="let r of remitosFiltrados()" style="text-align: center; border-bottom: 1px solid #eee">
             <td style="color: #6c757d; font-weight: bold"># {{ r.id }}</td>
             <td>{{ r.fecha_salida }}</td>
+            <td><strong>{{ r.vendedor }}</strong></td>
+            
             <td>
-              <strong>{{ r.vendedor }}</strong>
+              <div *ngIf="r.estado === 'Pendiente'">
+                <span style="color: #ffc107; font-weight: bold">Pendiente</span>
+              </div>
+              <div *ngIf="r.estado === 'Cerrado'">
+                <div style="font-size: 0.85em;">
+                  <div *ngIf="(r.total_rendir - r.abonado) > 0">
+                    <span style="color: #dc3545; font-weight: bold">Debe: ${{ (r.total_rendir - r.abonado) | number:'1.0-0' }}</span>
+                    <br><small>Total: ${{ r.total_rendir | number:'1.0-0' }}</small>
+                  </div>
+                  <div *ngIf="(r.total_rendir - r.abonado) <= 0">
+                    <span style="color: #28a745; font-weight: bold">✅ PAGADO</span>
+                  </div>
+                </div>
+              </div>
             </td>
-            <td>
-              <span
-                [style.color]="r.estado === 'Pendiente' ? '#ffc107' : '#28a745'"
-                style="font-weight: bold"
-                >{{ r.estado }}</span
-              >
-            </td>
+
             <td style="display: flex; gap: 5px; justify-content: center">
-              <button
-                (click)="abrirDetalle(r)"
-                class="btn btn-secundario"
-                style="padding: 6px 10px"
+              <button (click)="abrirDetalle(r)" class="btn btn-secundario" style="padding: 6px 10px">Ver</button>
+              
+              <button 
+                *ngIf="r.estado === 'Cerrado' && (r.total_rendir - r.abonado) > 0"
+                (click)="registrarPago(r)" 
+                class="btn btn-exito" 
+                style="padding: 6px 10px; background-color: #28a745;"
               >
-                Ver
+                💰 Cobrar
               </button>
-              <button
-                *ngIf="r.estado === 'Pendiente'"
-                (click)="editarRemitoHistorico(r)"
-                class="btn btn-editar"
-                style="padding: 6px 10px"
-              >
-                ✏️ Editar
-              </button>
-              <button
-                *ngIf="r.estado === 'Pendiente'"
-                (click)="abrirModalLiquidacion(r)"
-                class="btn btn-advertencia"
-                style="padding: 6px 10px"
-              >
-                💰 Liquidar
-              </button>
+
+              <button *ngIf="r.estado === 'Pendiente'" (click)="editarRemitoHistorico(r)" class="btn btn-editar" style="padding: 6px 10px">✏️ Editar</button>
+              <button *ngIf="r.estado === 'Pendiente'" (click)="abrirModalLiquidacion(r)" class="btn btn-advertencia" style="padding: 6px 10px">💰 Liquidar</button>
             </td>
           </tr>
           <tr *ngIf="remitosFiltrados().length === 0">
@@ -594,19 +590,22 @@
         >
           <button
             (click)="vistaDetalleActual.set('entrega')"
-            [class]="
-              vistaDetalleActual() === 'entrega' ? 'btn btn-principal' : 'btn btn-secundario'
-            "
+            [class]="vistaDetalleActual() === 'entrega' ? 'btn btn-principal' : 'btn btn-secundario'"
           >
             📦 Remito de Entrega
           </button>
           <button
             (click)="vistaDetalleActual.set('liquidacion')"
-            [class]="
-              vistaDetalleActual() === 'liquidacion' ? 'btn btn-exito' : 'btn btn-secundario'
-            "
+            [class]="vistaDetalleActual() === 'liquidacion' ? 'btn btn-exito' : 'btn btn-secundario'"
           >
             💰 Ticket de Liquidación
+          </button>
+          
+          <button
+            (click)="vistaDetalleActual.set('pagos')"
+            [class]="vistaDetalleActual() === 'pagos' ? 'btn btn-advertencia' : 'btn btn-secundario'"
+          >
+            📝 Historial de Pagos
           </button>
         </div>
 
@@ -822,6 +821,46 @@
                 >$ {{ ticketImpresion()?.totalNeto | number: '1.0-0' }}</span
               ></strong
             >
+          </div>
+        </div>
+
+        <div
+          *ngIf="vistaDetalleActual() === 'pagos'"
+          style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #ccc"
+        >
+          <h3 style="margin-top: 0; color: var(--color-texto); border-bottom: 2px dashed #ccc; padding-bottom: 10px;">
+            Registro de Cobros - {{ remitoEnDetalle().vendedor }}
+          </h3>
+          
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <thead style="background-color: #f8f9fa;">
+              <tr>
+                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Fecha y Hora</th>
+                <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Monto Abonado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let pago of pagosEnDetalle()">
+                <td style="padding: 10px; border: 1px solid #ddd; color: #555;">
+                  📅 {{ pago.fecha | date:'dd/MM/yyyy - HH:mm' }} hs
+                </td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: right; font-weight: bold; color: #28a745; font-size: 1.1em;">
+                  $ {{ pago.monto | number:'1.0-0' }}
+                </td>
+              </tr>
+              <tr *ngIf="pagosEnDetalle().length === 0">
+                <td colspan="2" style="padding: 20px; text-align: center; color: #6c757d; font-style: italic;">
+                  No hay pagos registrados para este remito todavía.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 20px; text-align: right; font-size: 1.2em; background: #fdfaf9; padding: 15px; border-radius: 6px;">
+            Deuda Restante: 
+            <strong [style.color]="(remitoEnDetalle().total_rendir - remitoEnDetalle().abonado) > 0 ? '#dc3545' : '#28a745'">
+              $ {{ (remitoEnDetalle().total_rendir - remitoEnDetalle().abonado) | number:'1.0-0' }}
+            </strong>
           </div>
         </div>
 

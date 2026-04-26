@@ -39,4 +39,14 @@ export class RemitoService {
   editarRemito(id: number, datos: any) {
     return this.http.put(`${this.apiUrl}/${id}`, datos);
   }
+
+  // En frontend/src/app/services/remito.service.ts
+
+  registrarPago(id: number, monto: number): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${id}/pagar`, { monto });
+  }
+
+  getPagosRemito(id: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/${id}/pagos`);
+  }
 }

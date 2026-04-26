@@ -42,7 +42,9 @@ export class RemitosComponent {
   itemsAgrupados = signal<{ [key: string]: any[] }>({});
   modoImpresion = signal<'remito' | 'ticket' | ''>('');
   remitoEnEdicion = signal<any | null>(null);
-  vistaDetalleActual = signal<'entrega' | 'liquidacion'>('entrega');
+
+  vistaDetalleActual = signal<'entrega' | 'liquidacion' | 'pagos'>('entrega');
+  pagosEnDetalle = signal<any[]>([]);
 
   // Comisión default desde config
   comisionPorcentaje: number = 25;
@@ -214,6 +216,12 @@ export class RemitosComponent {
         this.itemsAgrupados.set(agrupados);
 
         if (remito.estado === 'Cerrado') {
+          // --- NUEVA LLAMADA AL HISTORIAL DE PAGOS ---
+          this.remitoService.getPagosRemito(remito.id).subscribe((pagos: any[]) => {
+            this.pagosEnDetalle.set(pagos);
+          });
+          // -------------------------------------------
+
           let suma = 0;
           let sumaTotalVendido = 0; // <-- NUEVA VARIABLE
 
@@ -272,6 +280,7 @@ export class RemitosComponent {
     this.remitoEnDetalle.set(null);
     this.itemsEnDetalle.set([]);
     this.itemsAgrupados.set({});
+    this.pagosEnDetalle.set([]);
   }
 
   estaEnCarrito(productoId: number): boolean {
@@ -471,31 +480,65 @@ export class RemitosComponent {
   }
 
   confirmarCierreYTicket() {
-    const remito = this.remitoLiquidacion();
-    if (!remito) return;
-    const datosCierre = { items: this.itemsLiquidacion(), comision: this.comisionPorcentaje };
-    Swal.fire({
-      title: 'Liquidando...',
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading(),
-    });
-    this.remitoService.cerrarRemito(remito.id, datosCierre).subscribe({
-      next: () => {
-        Swal.fire(
-          '¡Liquidación Guardada!',
-          'Ahora podés imprimir el ticket desde el botón "Ver" en el historial.',
-          'success',
-        );
-        this.cerrarModalLiquidacion();
-        this.cargarHistorialRemitos();
-        this.cargarDatosBase();
-      },
-      error: () => Swal.fire('Error', 'Hubo un problema al liquidar.', 'error'),
-    });
-  }
+  const remito = this.remitoLiquidacion();
+  if (!remito) return;
+
+  // Calculamos el total exacto que se guarda en la BD
+  const totalRendirCalculado = this.totalNeto(); 
+
+  const datosCierre = { 
+    items: this.itemsLiquidacion(), 
+    comision: this.comisionPorcentaje,
+    total_rendir: totalRendirCalculado // <-- NUEVO: Enviamos el total al backend
+  };
+
+  Swal.fire({ title: 'Liquidando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  this.remitoService.cerrarRemito(remito.id, datosCierre).subscribe({
+    next: () => {
+      Swal.fire('¡Éxito!', 'Remito cerrado y deuda registrada.', 'success');
+      this.cerrarModalLiquidacion();
+      this.cargarHistorialRemitos();
+    },
+    error: () => Swal.fire('Error', 'No se pudo cerrar el remito.', 'error')
+  });
+}
 
   // Helper para el template: categorías agrupadas para imprimir
   get categoriasParaImpresion(): string[] {
     return [...this.configService.categorias.map((c) => c.nombre), 'Sin Categoría'];
   }
+
+  registrarPago(remito: any) {
+  const deuda = remito.total_rendir - remito.abonado;
+
+  Swal.fire({
+    title: `Pago - Remito #${remito.id}`,
+    html: `
+      <div style="text-align: left;">
+        <p><b>Vendedora:</b> ${remito.vendedor}</p>
+        <p><b>Deuda actual:</b> <span style="color: #dc3545; font-weight:bold;">$${deuda.toLocaleString()}</span></p>
+        <hr>
+        <label>Monto entregado por la vendedora:</label>
+      </div>
+    `,
+    input: 'number',
+    inputAttributes: { min: '1', max: deuda.toString(), step: '1' },
+    inputValue: deuda,
+    showCancelButton: true,
+    confirmButtonText: 'Registrar Cobro',
+    confirmButtonColor: '#28a745',
+    cancelButtonText: 'Cancelar'
+  }).then((result) => {
+    if (result.isConfirmed && result.value > 0) {
+      this.remitoService.registrarPago(remito.id, Number(result.value)).subscribe({
+        next: () => {
+          Swal.fire('¡Cobrado!', 'El pago fue asentado correctamente.', 'success');
+          this.cargarHistorialRemitos();
+        },
+        error: () => Swal.fire('Error', 'No se pudo registrar el pago.', 'error')
+      });
+    }
+  });
+}
 }

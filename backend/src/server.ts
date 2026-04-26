@@ -100,13 +100,23 @@ async function inicializarDB() {
         FOREIGN KEY(remito_id) REFERENCES Remitos(id),
         FOREIGN KEY(producto_id) REFERENCES Productos(id)
       );
+
+      CREATE TABLE IF NOT EXISTS Pagos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        remito_id INTEGER,
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL,
+        FOREIGN KEY(remito_id) REFERENCES Remitos(id)
+      );
     `);
 
     // Migraciones seguras (ignoran error si la columna ya existe)
     const migraciones = [
       `ALTER TABLE Productos ADD COLUMN medida TEXT;`,
       `ALTER TABLE Remitos ADD COLUMN comision REAL DEFAULT 0;`,
-      `ALTER TABLE Remitos_Items ADD COLUMN precio REAL DEFAULT 0;` // <-- NUEVA
+      `ALTER TABLE Remitos_Items ADD COLUMN precio REAL DEFAULT 0;`, // <-- NUEVA
+      `ALTER TABLE Remitos ADD COLUMN total_rendir REAL DEFAULT 0;`, // <-- NUEVA
+      `ALTER TABLE Remitos ADD COLUMN abonado REAL DEFAULT 0;`, // <-- NUEVA
     ];
     for (const m of migraciones) {
       try {
@@ -470,7 +480,7 @@ app.post("/api/remitos", async (req, res) => {
 app.get("/api/remitos", async (req, res) => {
   try {
     const remitos = await db.all(`
-      SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, v.nombre as vendedor
+      SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, r.total_rendir, r.abonado, v.nombre as vendedor
       FROM Remitos r
       JOIN Vendedores v ON r.vendedor_id = v.id
     `);
@@ -479,7 +489,6 @@ app.get("/api/remitos", async (req, res) => {
     res.status(500).json({ error: "Error al obtener los remitos" });
   }
 });
-
 app.get("/api/remitos/:id/items", async (req, res) => {
   try {
    const items = await db.all(
@@ -499,13 +508,17 @@ app.get("/api/remitos/:id/items", async (req, res) => {
 
 app.put("/api/remitos/:id/cerrar", async (req, res) => {
   const remitoId = req.params.id;
-  const { items, comision } = req.body;
+  const { items, comision, total_rendir } = req.body; // <-- AHORA RECIBE EL TOTAL
   try {
     await db.run("BEGIN TRANSACTION");
-    await db.run(`UPDATE Remitos SET estado='Cerrado', comision=? WHERE id=?`, [
+    
+    // Guardamos el total_rendir y reseteamos el abonado a 0
+    await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [
       comision || 0,
+      total_rendir || 0,
       remitoId,
     ]);
+    
     for (const item of items) {
       await db.run(
         `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
@@ -526,6 +539,38 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
   } catch (error) {
     await db.run("ROLLBACK");
     res.status(500).json({ error: "Error al cerrar el remito" });
+  }
+});
+
+// REGISTRAR PAGO PARCIAL A UN REMITO CERRADO
+app.put("/api/remitos/:id/pagar", async (req, res) => {
+  const remitoId = req.params.id;
+  const { monto } = req.body;
+  
+  if (!monto || monto <= 0) return res.status(400).json({ error: "Monto inválido" });
+
+  try {
+    await db.run("BEGIN TRANSACTION");
+    // 1. Sumamos al total abonado
+    await db.run(`UPDATE Remitos SET abonado = abonado + ? WHERE id=?`, [monto, remitoId]);
+    // 2. Guardamos el registro histórico del pago con fecha y hora
+    await db.run(`INSERT INTO Pagos (remito_id, monto, fecha) VALUES (?, ?, ?)`, [remitoId, monto, new Date().toISOString()]);
+    await db.run("COMMIT");
+
+    res.json({ mensaje: "Pago registrado y guardado en el historial" });
+  } catch (error) {
+    await db.run("ROLLBACK");
+    res.status(500).json({ error: "Error al registrar el pago" });
+  }
+});
+
+// OBTENER HISTORIAL DE PAGOS DE UN REMITO
+app.get("/api/remitos/:id/pagos", async (req, res) => {
+  try {
+    const pagos = await db.all(`SELECT * FROM Pagos WHERE remito_id = ? ORDER BY fecha DESC`, [req.params.id]);
+    res.json(pagos);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener los pagos" });
   }
 });
 
