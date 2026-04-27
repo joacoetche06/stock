@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-
+import { from } from 'rxjs';
 export interface ItemRemito {
   producto_id: number;
   cantidad: number;
@@ -18,7 +18,21 @@ export interface RemitoPayload {
 export class RemitoService {
   private apiUrl = 'http://127.0.0.1:3001/api/remitos';
 
-  constructor(private http: HttpClient) {}
+  private electron: any; // Declaramos la variable
+
+  constructor(private http: HttpClient) {
+    // Truco infalible para que Angular invoque el require de Electron
+    const windowRequire = (window as any).require;
+    if (windowRequire) {
+      try {
+        this.electron = windowRequire('electron');
+      } catch (e) {
+        console.warn('No se pudo cargar electron');
+      }
+    } else {
+      console.warn('Electron IPC no está disponible. Los PDF nativos no funcionarán.');
+    }
+  }
 
   getRemitos(): Observable<any[]> {
     return this.http.get<any[]>(this.apiUrl);
@@ -48,5 +62,25 @@ export class RemitoService {
 
   getPagosRemito(id: number): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}/${id}/pagos`);
+  }
+
+  solicitarPdfNativo(idRemito: number, vendedor: string, vista: string): Observable<any> {
+    // Definimos el prefijo según qué pestaña esté abierta
+    let prefijo = 'Remito';
+    if (vista === 'liquidacion') prefijo = 'Liquidacion';
+    if (vista === 'pagos') prefijo = 'Historial_Pagos';
+
+    // Si estamos en Electron, mandamos el mensaje con el nombre dinámico
+    if (this.electron) {
+      return from(
+        this.electron.ipcRenderer.invoke('generar-pdf-nativo', { 
+          nombreArchivo: `${prefijo}_${idRemito}_${vendedor}` 
+        })
+      );
+    } else {
+      // Si estamos en Chrome
+      window.print();
+      return from([true]); 
+    }
   }
 }

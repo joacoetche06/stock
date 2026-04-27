@@ -733,6 +733,9 @@
               "
             >
               <p style="margin: 5px 0">
+                <strong>REMITO</strong> {{ ticketImpresion()?.idRemito }}
+              </p>
+              <p style="margin: 5px 0">
                 <strong>{{ nombreVendedor | titlecase }}:</strong> {{ ticketImpresion()?.vendedor }}
               </p>
               <p style="margin: 5px 0">
@@ -843,7 +846,7 @@
 
         <div style="margin-top: 20px; text-align: right">
           <button (click)="imprimirVistaActual()" class="btn btn-principal">
-            🖨️ Imprimir / Guardar PDF
+            💾 Guardar como PDF
           </button>
         </div>
       </div>

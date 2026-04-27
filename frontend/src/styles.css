@@ -397,19 +397,39 @@ select.input-form:-moz-focusring {
   break-inside: avoid !important;
 }
 
-/* REGLAS PARA CTRL + P */
+/* REGLAS PARA CTRL + P Y GENERACIÓN DE PDF NATIVO */
 @media print {
   @page { size: A4 portrait; margin: 0.5cm; }
+  
+  /* 1. Destruimos la estructura de columnas y flexbox que bloquean el PDF */
+  html, body, .app-container, main, div, .tarjeta {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* 2. Ocultamos toda la interfaz del programa */
   body * { visibility: hidden; }
-  #zona-impresion, #ticket-liquidacion, #registro-pagos {
+
+  /* 3. Mostramos SOLO el interior de los tickets */
+  #zona-impresion, #zona-impresion *, 
+  #ticket-liquidacion, #ticket-liquidacion *, 
+  #registro-pagos, #registro-pagos * {
     visibility: visible !important;
+  }
+
+  /* 4. Pegamos el ticket exactamente al borde del papel A4 */
+  #zona-impresion, #ticket-liquidacion, #registro-pagos {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-  }
-  /* Aplicamos la misma lógica de letra grande al imprimir */
-  #zona-impresion, #ticket-liquidacion, #registro-pagos {
+    min-width: 0 !important; /* Destruye el ancho fijo de 850px para que no se corte a la derecha */
     font-size: 18px !important;
   }
 }

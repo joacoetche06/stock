@@ -240,6 +240,7 @@ export class RemitosComponent {
             items,
             totalNeto: suma,
             totalVendido: sumaTotalVendido, // <-- LO GUARDAMOS EN EL TICKET
+            idRemito: remito.id // <-- LO GUARDAMOS PARA USARLO EN EL PDF Nativo
           });
         } else {
           this.ticketImpresion.set(null);
@@ -367,10 +368,18 @@ export class RemitosComponent {
   }
 
   imprimirVistaActual() {
-    // Usamos el motor nativo del navegador (Ctrl+P automático)
-    window.print();
+    // ELIMINAMOS el Swal.fire previo porque bloqueaba la pantalla al imprimir
+    this.remitoService.solicitarPdfNativo(this.remitoEnDetalle().id, this.remitoEnDetalle().vendedor, this.vistaDetalleActual()).subscribe({
+      next: (exito) => {
+        if (exito) {
+          Swal.fire('¡Éxito!', 'El PDF se guardó correctamente.', 'success');
+        }
+      },
+      error: () => {
+        Swal.fire('Error', 'No se pudo generar el PDF nativo.', 'error');
+      }
+    });
   }
-
   abrirModalLiquidacion(remito: any) {
     this.remitoLiquidacion.set(remito);
     this.remitoService.getRemitoItems(remito.id).subscribe({
@@ -442,6 +451,7 @@ export class RemitosComponent {
       Swal.fire('¡Éxito!', 'Remito cerrado y deuda registrada.', 'success');
       this.cerrarModalLiquidacion();
       this.cargarHistorialRemitos();
+      this.cerrarDetalle();
     },
     error: () => Swal.fire('Error', 'No se pudo cerrar el remito.', 'error')
   });
@@ -478,6 +488,7 @@ export class RemitosComponent {
         next: () => {
           Swal.fire('¡Cobrado!', 'El pago fue asentado correctamente.', 'success');
           this.cargarHistorialRemitos();
+          this.cerrarDetalle();
         },
         error: () => Swal.fire('Error', 'No se pudo registrar el pago.', 'error')
       });
