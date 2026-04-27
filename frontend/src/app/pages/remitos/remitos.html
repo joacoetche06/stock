@@ -613,7 +613,7 @@
 
         <!-- VISTA ENTREGA -->
         <div *ngIf="vistaDetalleActual() === 'entrega'" style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc;">
-          <div id="zona-impresion" style="background: white; padding: 20px; min-width: 850px;">
+          <div id="zona-impresion" class="seccion-impresion" style="background: white; padding: 20px; min-width: 850px;">
             <div style="text-align: center; margin-bottom: 20px">
               <img src="logo.ico" alt="Logo" style="height: 100px; width: auto" />
             </div>
@@ -631,14 +631,15 @@
 
             <div *ngFor="let categoria of categoriasParaImpresion">
               <div *ngIf="itemsAgrupados()[categoria]">
-                <h4 style="margin: 10px 0 5px 0; border-bottom: 1px solid #eee; padding-bottom: 5px">
-                  {{ categoria }}
-                </h4>
-                <table
-                  style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px"
-                >
-                  <thead style="background: #f8f9fa">
+                
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 16px">
+                  <thead>
                     <tr>
+                      <th colspan="7" style="background: #fdfaf9; color: var(--color-principal); text-align: left; padding: 15px; font-size: 1.4em; border: 1px solid #ddd;">
+                        SECCIÓN: {{ categoria | uppercase }}
+                      </th>
+                    </tr>
+                    <tr style="background: #f8f9fa">
                       <th style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 12%">Código</th>
                       <th style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 40%">{{ nombreProducto | titlecase }}</th>
                       <th style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 15%">Material</th>
@@ -653,39 +654,14 @@
                       <td style="padding: 8px; border: 1px solid #ddd">{{ item.codigo }}</td>
                       <td style="padding: 8px; border: 1px solid #ddd">{{ item.nombre }}</td>
                       <td style="padding: 8px; border: 1px solid #ddd">{{ item.material }}</td>
-                      <td style="padding: 8px; text-align: right; border: 1px solid #ddd">
-                        $ {{ item.precio }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px;
-                          text-align: center;
-                          border: 1px solid #ddd;
-                          font-weight: bold;
-                        "
-                      >
+                      <td style="padding: 8px; text-align: right; border: 1px solid #ddd">$ {{ item.precio }}</td>
+                      <td style="padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;">
                         {{ item.cantidad_entregada }}
                       </td>
-                      <td
-                        style="
-                          padding: 8px;
-                          text-align: center;
-                          border: 1px solid #ddd;
-                          color: #28a745;
-                          font-weight: bold;
-                        "
-                      >
+                      <td style="padding: 8px; text-align: center; border: 1px solid #ddd; color: #28a745; font-weight: bold;">
                         {{ remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_vendida }}
                       </td>
-                      <td
-                        style="
-                          padding: 8px;
-                          text-align: center;
-                          border: 1px solid #ddd;
-                          color: #dc3545;
-                          font-weight: bold;
-                        "
-                      >
+                      <td style="padding: 8px; text-align: center; border: 1px solid #ddd; color: #dc3545; font-weight: bold;">
                         {{ remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_devuelta }}
                       </td>
                     </tr>
@@ -731,7 +707,7 @@
 
         <div *ngIf="vistaDetalleActual() === 'liquidacion'" style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc;">
           <div
-            id="ticket-liquidacion"
+            id="ticket-liquidacion" class="seccion-impresion"
             style="
               background: white;
               padding: 30px;
@@ -825,7 +801,7 @@
 
         <div *ngIf="vistaDetalleActual() === 'pagos'" style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc;">
           <div
-            id="registro-pagos"
+            id="registro-pagos" class="seccion-impresion"
             style="background: white; padding: 20px; min-width: 850px;"
           >
             <h3 style="margin-top: 0; color: var(--color-texto); border-bottom: 2px dashed #ccc; padding-bottom: 10px;">
@@ -867,7 +843,7 @@
 
         <div style="margin-top: 20px; text-align: right">
           <button (click)="imprimirVistaActual()" class="btn btn-principal">
-            🖨️ Descargar PDF Actual
+            🖨️ Imprimir / Guardar PDF
           </button>
         </div>
       </div>

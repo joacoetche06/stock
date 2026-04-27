@@ -367,79 +367,8 @@ export class RemitosComponent {
   }
 
   imprimirVistaActual() {
-    const vista = this.vistaDetalleActual(); // Puede ser 'entrega', 'liquidacion' o 'pagos'
-    Swal.fire({
-      title: 'Generando PDF...',
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading(),
-    });
-
-    setTimeout(() => {
-      let elementId = '';
-      let prefijoArchivo = '';
-
-      // Identificamos qué pestaña está abierta
-      if (vista === 'entrega') {
-        elementId = 'zona-impresion';
-        prefijoArchivo = 'Remito';
-      } else if (vista === 'liquidacion') {
-        elementId = 'ticket-liquidacion';
-        prefijoArchivo = 'Liquidacion';
-      } else if (vista === 'pagos') {
-        elementId = 'registro-pagos';
-        prefijoArchivo = 'Historial_Pagos';
-      }
-
-      const element = document.getElementById(elementId);
-
-      if (element) {
-        // 🪄 EL TRUCO MAGICO: Forzamos el ancho para que la foto salga en calidad A4
-        const originalWidth = element.style.width;
-        const originalPadding = element.style.padding;
-        const originalOverflow = element.style.overflowX;
-        
-        element.style.width = '1000px';
-        element.style.padding = '40px'; 
-        element.style.overflowX = 'visible'; // Evita que se corte la foto
-
-        html2canvas(element, {
-          scale: 2,
-          scrollY: -window.scrollY, 
-        }).then((canvas) => {
-          // Restauramos la vista al instante
-          element.style.width = originalWidth;
-          element.style.padding = originalPadding;
-          element.style.overflowX = originalOverflow;
-
-          const imgData = canvas.toDataURL('image/png');
-          const pdf = new jsPDF('p', 'mm', 'a4');
-
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-          let heightLeft = imgHeight;
-          let position = 0;
-
-          // Pegamos la primer hoja
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-          heightLeft -= pageHeight;
-
-          // Hojas siguientes (Paginación)
-          while (heightLeft > 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pageHeight;
-          }
-
-          const nombreArchivo = `${prefijoArchivo}_${this.remitoEnDetalle().id}_${this.remitoEnDetalle().vendedor}.pdf`;
-
-          pdf.save(nombreArchivo);
-          Swal.close();
-        });
-      }
-    }, 800);
+    // Usamos el motor nativo del navegador (Ctrl+P automático)
+    window.print();
   }
 
   abrirModalLiquidacion(remito: any) {

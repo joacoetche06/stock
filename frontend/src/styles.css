@@ -52,7 +52,23 @@
   #zona-impresion table {
     table-layout: auto !important; /* Permite que las columnas se ensanchen según el texto */
     width: 100% !important;
-    font-size: 15px !important; /* Letra grande ideal para Adri */
+    font-size: 24px !important; /* Letra grande ideal para Adri */
+  }
+
+  /* 2. EVITAR QUE SE CORTEN LAS FILAS */
+  /* Esta es la regla mágica: le dice al navegador que NO puede cortar una fila al medio */
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 3. Evitar que un título de categoría quede solo al final de una hoja */
+  h4 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    margin-top: 30px !important;
+    font-size: 24px !important;
+    border-bottom: 2px solid var(--color-principal) !important;
   }
 
   #zona-impresion th,
@@ -348,4 +364,52 @@ select.input-form:-moz-focusring {
   visibility: visible;
   opacity: 1;
   bottom: 140%; /* Efecto de que flota un poquito para arriba */
+}
+
+
+/* --- ACTUALIZACIÓN EN styles.css --- */
+
+/* Creamos una clase base para que hereden el tamaño */
+.seccion-impresion {
+  background: white !important;
+  color: black !important;
+  font-family: Arial, sans-serif !important;
+}
+
+/* Regla para AGRANDAR LA LETRA en serio */
+.seccion-impresion, 
+.seccion-impresion table, 
+.seccion-impresion p, 
+.seccion-impresion td, 
+.seccion-impresion th {
+  font-size: 18px !important; /* Adri pidió letra más grande */
+}
+
+.seccion-impresion h3, .seccion-impresion h4, .seccion-impresion .titulo-cat {
+  font-size: 22px !important;
+  font-weight: bold !important;
+  color: #000 !important;
+}
+
+/* Blindaje de filas para que no se tajeen */
+.seccion-impresion tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+/* REGLAS PARA CTRL + P */
+@media print {
+  @page { size: A4 portrait; margin: 0.5cm; }
+  body * { visibility: hidden; }
+  #zona-impresion, #ticket-liquidacion, #registro-pagos {
+    visibility: visible !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+  }
+  /* Aplicamos la misma lógica de letra grande al imprimir */
+  #zona-impresion, #ticket-liquidacion, #registro-pagos {
+    font-size: 18px !important;
+  }
 }
