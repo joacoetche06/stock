@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { tap } from 'rxjs';
+import { tap, Observable } from 'rxjs';
 
 export interface CategoriaConfig {
   nombre: string;
@@ -62,17 +62,31 @@ export class ConfigService {
     root.style.setProperty('--color-acento', cfg.negocio.colorAcento);
   }
 
-  // Getters de conveniencia
   get categorias(): CategoriaConfig[] {
-    return this.config()?.inventario.categorias ?? [];
+    const cats = this.config()?.inventario.categorias ?? [];
+    // Clonamos el array y lo ordenamos alfabéticamente
+    return [...cats].sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
 
   get materiales(): string[] {
-    return this.config()?.inventario.materiales ?? [];
+    const mats = this.config()?.inventario.materiales ?? [];
+    return [...mats].sort((a, b) => a.localeCompare(b));
+  }
+
+  // AGREGAR ESTA FUNCIÓN NUEVA:
+  actualizarConfig(nuevaConfig: AppConfig): Observable<any> {
+    return this.http.post(this.apiUrl, nuevaConfig).pipe(
+      tap(() => {
+        this.config.set(nuevaConfig);
+        this.aplicarColores(nuevaConfig);
+      })
+    );
   }
 
   get medidas(): string[] {
-    return this.config()?.inventario.medidas ?? [];
+    const meds = this.config()?.inventario.medidas ?? [];
+    // Ordenamos inteligentemente (40 cm, 45 cm, etc.)
+    return [...meds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }
 
   get usaMedida(): boolean {

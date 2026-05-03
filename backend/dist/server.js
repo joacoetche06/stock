@@ -115,6 +115,21 @@ inicializarDB();
 app.get("/api/config", (req, res) => {
     res.json(CONFIG);
 });
+// Guardar nueva configuración desde el frontend
+app.post("/api/config", (req, res) => {
+    try {
+        const nuevaConfig = req.body;
+        // Sobrescribimos el archivo físico
+        fs_1.default.writeFileSync(rutaConfig, JSON.stringify(nuevaConfig, null, 2), "utf-8");
+        // Actualizamos la variable en memoria del servidor
+        CONFIG = nuevaConfig;
+        res.json({ mensaje: "Configuración actualizada correctamente" });
+    }
+    catch (error) {
+        console.error("Error al guardar config:", error);
+        res.status(500).json({ error: "Error al guardar la configuración" });
+    }
+});
 app.get("/api/status", (req, res) => {
     res.json({
         mensaje: "Servidor funcionando correctamente.",

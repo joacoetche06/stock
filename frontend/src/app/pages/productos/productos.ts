@@ -322,4 +322,109 @@ export class ProductosComponent {
     doc.save(`Lista_Precios_${fecha.replace(/\//g, '-')}.pdf`);
     Swal.fire('¡Éxito!', 'Lista de precios descargada.', 'success');
   }
+
+  async agregarMaterial() {
+    const { value: nuevoMaterial } = await Swal.fire({
+      title: 'Nuevo Material',
+      input: 'text',
+      inputPlaceholder: 'Ej: Acero dorado',
+      showCancelButton: true,
+      confirmButtonText: 'Agregar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: this.configService.config()?.negocio.colorPrincipal
+    });
+
+    if (nuevoMaterial) {
+      const configActual = this.configService.config();
+      if (configActual) {
+        // Clonamos la config para no mutarla directamente
+        const nuevaConfig = JSON.parse(JSON.stringify(configActual));
+        
+        // Evitamos duplicados (ignorando mayúsculas/minúsculas)
+        const existe = nuevaConfig.inventario.materiales.find((m: string) => m.toLowerCase() === nuevoMaterial.toLowerCase());
+        if (existe) return Swal.fire('Error', 'Ese material ya existe.', 'error');
+        
+        nuevaConfig.inventario.materiales.push(nuevoMaterial);
+        
+        this.configService.actualizarConfig(nuevaConfig).subscribe(() => {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Material agregado', showConfirmButton: false, timer: 2000 });
+        });
+      }
+    }
+
+    return;
+  }
+
+  async agregarCategoria() {
+    const { value: formValues } = await Swal.fire({
+      title: 'Nueva Categoría',
+      html:
+        '<input id="swal-cat-nombre" class="swal2-input" placeholder="Nombre (Ej: Tobilleras)">' +
+        '<input id="swal-cat-prefijo" class="swal2-input" placeholder="Prefijo (Ej: TO)" maxlength="3" style="text-transform: uppercase;">',
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Agregar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
+      preConfirm: () => {
+        const nombre = (document.getElementById('swal-cat-nombre') as HTMLInputElement).value.trim();
+        const prefijo = (document.getElementById('swal-cat-prefijo') as HTMLInputElement).value.trim().toUpperCase();
+        if (!nombre || !prefijo) {
+          Swal.showValidationMessage('Ambos campos son obligatorios');
+          return null;
+        }
+        return { nombre, prefijo };
+      }
+    });
+
+    if (formValues) {
+      const configActual = this.configService.config();
+      if (configActual) {
+        const nuevaConfig = JSON.parse(JSON.stringify(configActual));
+        
+        // Evitamos duplicados
+        const existe = nuevaConfig.inventario.categorias.find((c: any) => c.nombre.toLowerCase() === formValues.nombre.toLowerCase() || c.prefijo === formValues.prefijo);
+        if (existe) return Swal.fire('Error', 'Ya existe una categoría con ese nombre o prefijo.', 'error');
+        
+        nuevaConfig.inventario.categorias.push(formValues);
+        
+        this.configService.actualizarConfig(nuevaConfig).subscribe(() => {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Categoría agregada', showConfirmButton: false, timer: 2000 });
+        });
+      }
+    }
+    return;
+  }
+
+  async agregarMedida() {
+    const { value: nuevaMedida } = await Swal.fire({
+      title: 'Nueva Medida',
+      input: 'text',
+      inputPlaceholder: 'Ej: 65 cm',
+      showCancelButton: true,
+      confirmButtonText: 'Agregar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: this.configService.config()?.negocio.colorPrincipal
+    });
+
+    if (nuevaMedida) {
+      const configActual = this.configService.config();
+      if (configActual) {
+        const nuevaConfig = JSON.parse(JSON.stringify(configActual));
+        
+        // Evitamos duplicados
+        const existe = nuevaConfig.inventario.medidas.find((m: string) => m.toLowerCase() === nuevaMedida.toLowerCase());
+        if (existe) return Swal.fire('Error', 'Esa medida ya existe.', 'error');
+        
+        nuevaConfig.inventario.medidas.push(nuevaMedida);
+        
+        this.configService.actualizarConfig(nuevaConfig).subscribe(() => {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Medida agregada', showConfirmButton: false, timer: 2000 });
+        });
+      }
+    }
+
+    return;
+  }
+
 }

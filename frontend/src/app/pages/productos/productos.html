@@ -14,48 +14,53 @@
     <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px">
 
       <!-- CATEGORÍA (dinámica desde config) -->
-      <div class="custom-select" style="width: 150px">
-        <div class="select-header" [class.abierto]="dropdownAbierto() === 'form-cat'" (click)="toggleDropdown('form-cat', $event)">
-          <span [class.option-placeholder]="!nuevoProducto.categoria">{{ nuevoProducto.categoria || 'Categoría' }}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B87366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            [style.transform]="dropdownAbierto() === 'form-cat' ? 'rotate(180deg)' : 'rotate(0)'" style="transition: transform 0.2s">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+      <div style="display: flex; gap: 5px; align-items: center;">
+        <div class="custom-select" style="width: 150px">
+          <!-- TODO TU CÓDIGO ORIGINAL DEL SELECT HEADER Y OPTIONS -->
+          <div class="select-header" [class.abierto]="dropdownAbierto() === 'form-cat'" (click)="toggleDropdown('form-cat', $event)">
+            <span [class.option-placeholder]="!nuevoProducto.categoria">{{ nuevoProducto.categoria || 'Categoría' }}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B87366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [style.transform]="dropdownAbierto() === 'form-cat' ? 'rotate(180deg)' : 'rotate(0)'" style="transition: transform 0.2s"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="select-options" *ngIf="dropdownAbierto() === 'form-cat'">
+            <div class="option-item" (click)="setCategoriaForm('')">------</div>
+            <div class="option-item" *ngFor="let cat of categorias" (click)="setCategoriaForm(cat.nombre)">{{ cat.nombre }}</div>
+          </div>
         </div>
-        <div class="select-options" *ngIf="dropdownAbierto() === 'form-cat'">
-          <div class="option-item" (click)="setCategoriaForm('')">------</div>
-          <div class="option-item" *ngFor="let cat of categorias" (click)="setCategoriaForm(cat.nombre)">{{ cat.nombre }}</div>
-        </div>
+        <button type="button" *ngIf="!editandoId()" (click)="agregarCategoria()" class="btn btn-principal" style="padding: 0 10px; height: 40px; font-size: 1.2em;" title="Crear Categoría">+</button>
       </div>
 
       <!-- MEDIDA (solo aparece si usaMedida y la categoría seleccionada es la que la requiere) -->
-      <div class="custom-select" style="width: 120px" *ngIf="usaMedida && nuevoProducto.categoria === categoriaConMedida">
-        <div class="select-header" [class.abierto]="dropdownAbierto() === 'form-med'" (click)="toggleDropdown('form-med', $event)" style="background-color: var(--color-secundario)">
-          <span [class.option-placeholder]="!nuevoProducto.medida">{{ nuevoProducto.medida || 'Medida' }}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B87366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            [style.transform]="dropdownAbierto() === 'form-med' ? 'rotate(180deg)' : 'rotate(0)'" style="transition: transform 0.2s">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+      <div style="display: flex; gap: 5px; align-items: center;" *ngIf="usaMedida && nuevoProducto.categoria === categoriaConMedida">
+        <div class="custom-select" style="width: 120px">
+          <div class="select-header" [class.abierto]="dropdownAbierto() === 'form-med'" (click)="toggleDropdown('form-med', $event)" style="background-color: var(--color-secundario)">
+            <span [class.option-placeholder]="!nuevoProducto.medida">{{ nuevoProducto.medida || 'Medida' }}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B87366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              [style.transform]="dropdownAbierto() === 'form-med' ? 'rotate(180deg)' : 'rotate(0)'" style="transition: transform 0.2s">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+          <div class="select-options" *ngIf="dropdownAbierto() === 'form-med'">
+            <div class="option-item" (click)="setMedidaForm('')">------</div>
+            <div class="option-item" *ngFor="let med of medidas" (click)="setMedidaForm(med)">{{ med }}</div>
+          </div>
         </div>
-        <div class="select-options" *ngIf="dropdownAbierto() === 'form-med'">
-          <div class="option-item" (click)="setMedidaForm('')">------</div>
-          <div class="option-item" *ngFor="let med of medidas" (click)="setMedidaForm(med)">{{ med }}</div>
-        </div>
+        <button type="button" *ngIf="!editandoId()" (click)="agregarMedida()" class="btn btn-principal" style="padding: 0 10px; height: 40px; font-size: 1.2em;" title="Crear Medida">+</button>
       </div>
 
       <!-- MATERIAL (dinámico desde config) -->
-      <div class="custom-select" style="width: 150px">
-        <div class="select-header" [class.abierto]="dropdownAbierto() === 'form-mat'" (click)="toggleDropdown('form-mat', $event)">
-          <span [class.option-placeholder]="!nuevoProducto.material">{{ nuevoProducto.material || 'Material' }}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B87366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            [style.transform]="dropdownAbierto() === 'form-mat' ? 'rotate(180deg)' : 'rotate(0)'" style="transition: transform 0.2s">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+      <div style="display: flex; gap: 5px; align-items: center;">
+        <div class="custom-select" style="width: 150px">
+          <!-- TODO TU CÓDIGO ORIGINAL DEL SELECT HEADER Y OPTIONS -->
+          <div class="select-header" [class.abierto]="dropdownAbierto() === 'form-mat'" (click)="toggleDropdown('form-mat', $event)">
+            <span [class.option-placeholder]="!nuevoProducto.material">{{ nuevoProducto.material || 'Material' }}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B87366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [style.transform]="dropdownAbierto() === 'form-mat' ? 'rotate(180deg)' : 'rotate(0)'" style="transition: transform 0.2s"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="select-options" *ngIf="dropdownAbierto() === 'form-mat'">
+            <div class="option-item" (click)="setMaterialForm('')">------</div>
+            <div class="option-item" *ngFor="let mat of materiales" (click)="setMaterialForm(mat)">{{ mat }}</div>
+          </div>
         </div>
-        <div class="select-options" *ngIf="dropdownAbierto() === 'form-mat'">
-          <div class="option-item" (click)="setMaterialForm('')">------</div>
-          <div class="option-item" *ngFor="let mat of materiales" (click)="setMaterialForm(mat)">{{ mat }}</div>
-        </div>
+        <button type="button" *ngIf="!editandoId()" (click)="agregarMaterial()" class="btn btn-principal" style="padding: 0 10px; height: 40px; font-size: 1.2em;" title="Crear Material">+</button>
       </div>
 
       <input type="text" [placeholder]="'Descripción del ' + nombreProducto" [(ngModel)]="nuevoProducto.nombre" class="input-form"

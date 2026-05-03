@@ -1,83 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
 
-/* =========================================
-   REGLAS GLOBALES DE IMPRESIÓN (REMITOS)
-   ========================================= */
-@media print {
-  /* 1. Margen mínimo para borrar los textos del navegador (URL, Fecha autogenerada) */
-  @page { 
-    size: A4 portrait; 
-    margin: 0.5cm 0.5cm 1.5cm 0.5cm; /* Arriba, Derecha, Abajo (más grande), Izquierda */
-  }
 
-  /* 2. Matamos las alturas forzadas para ELIMINAR LA HOJA EXTRA en blanco */
-  html,
-  body,
-  .app-container,
-  main {
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: white !important;
-  }
-
-  /* 3. Ocultamos la app y mostramos solo el remito o el ticket */
-  nav {
-    display: none !important;
-  }
-  body * {
-    visibility: hidden;
-  }
-
-  /* Hacemos visibles AMBOS tipos de tickets cuando toque imprimirlos */
-  #zona-impresion,
-  #zona-impresion *,
-  #ticket-liquidacion,
-  #ticket-liquidacion * {
-    visibility: visible;
-  }
-
-  /* Posicionamos cualquiera de los dos arriba de todo */
-  #zona-impresion,
-  #ticket-liquidacion {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100% !important;
-    padding: 1cm !important;
-    box-sizing: border-box;
-  }
-  /* 4. TABLA INTELIGENTE: Letra grande y sin cortar palabras */
-  #zona-impresion table {
-    table-layout: auto !important; /* Permite que las columnas se ensanchen según el texto */
-    width: 100% !important;
-    font-size: 24px !important; /* Letra grande ideal para Adri */
-  }
-
-  /* 2. EVITAR QUE SE CORTEN LAS FILAS */
-  /* Esta es la regla mágica: le dice al navegador que NO puede cortar una fila al medio */
-  tr {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* 3. Evitar que un título de categoría quede solo al final de una hoja */
-  h4 {
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-    margin-top: 30px !important;
-    font-size: 24px !important;
-    border-bottom: 2px solid var(--color-principal) !important;
-  }
-
-  #zona-impresion th,
-  #zona-impresion td {
-    padding: 8px !important; /* Celdas más altas para que respire el texto */
-    word-wrap: normal !important;
-    white-space: normal !important; /* Si la descripción es larga, baja el texto entero, no lo corta */
-  }
-}
 /* src/styles.css */
 :root {
   --color-principal: #b87366; /* Cobre / Rose Gold del diamante */
@@ -397,11 +320,17 @@ select.input-form:-moz-focusring {
   break-inside: avoid !important;
 }
 
-/* REGLAS PARA CTRL + P Y GENERACIÓN DE PDF NATIVO */
+/* =========================================
+   REGLAS PARA CTRL + P Y GENERACIÓN DE PDF
+   ========================================= */
 @media print {
-  @page { size: A4 portrait; margin: 0.5cm; }
+  /* 1. Margen con más espacio abajo para que entre el "Hoja 1 de 2" */
+  @page { 
+    size: A4 portrait; 
+    margin: 0.5cm 0.5cm 1.5cm 0.5cm; 
+  }
   
-  /* 1. Destruimos la estructura de columnas y flexbox que bloquean el PDF */
+  /* 2. Destruimos la estructura de columnas y flexbox que bloquean el PDF */
   html, body, .app-container, main, div, .tarjeta {
     display: block !important;
     position: static !important;
@@ -413,23 +342,38 @@ select.input-form:-moz-focusring {
     overflow: visible !important;
   }
 
-  /* 2. Ocultamos toda la interfaz del programa */
+  /* 3. Ocultamos toda la interfaz del programa */
   body * { visibility: hidden; }
 
-  /* 3. Mostramos SOLO el interior de los tickets */
+  /* 4. Mostramos SOLO el interior de los tickets */
   #zona-impresion, #zona-impresion *, 
   #ticket-liquidacion, #ticket-liquidacion *, 
   #registro-pagos, #registro-pagos * {
     visibility: visible !important;
   }
 
-  /* 4. Pegamos el ticket exactamente al borde del papel A4 */
+  /* 5. Pegamos el ticket exactamente al borde del papel A4 */
   #zona-impresion, #ticket-liquidacion, #registro-pagos {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    min-width: 0 !important; /* Destruye el ancho fijo de 850px para que no se corte a la derecha */
-    font-size: 18px !important;
+    min-width: 0 !important;
+    font-size: 18px !important; /* Letra grande y legible */
+  }
+
+  /* 6. EVITAR QUE SE CORTEN LAS FILAS A LA MITAD */
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 7. Espaciado en celdas para que no se aprieten */
+  #zona-impresion th, #zona-impresion td,
+  #ticket-liquidacion th, #ticket-liquidacion td,
+  #registro-pagos th, #registro-pagos td {
+    padding: 8px !important; 
+    word-wrap: normal !important;
+    white-space: normal !important; 
   }
 }

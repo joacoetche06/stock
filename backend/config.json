@@ -19,16 +19,52 @@
     "nombreVendedorPlural": "vendedoras",
     "usaMedida": true,
     "categoriaConMedida": "Cadenas",
-    "medidas": ["40 cm", "45 cm", "50 cm", "55 cm", "60 cm"],
-    "categorias": [
-      { "nombre": "Collares", "prefijo": "CO" },
-      { "nombre": "Cadenas", "prefijo": "CA" },
-      { "nombre": "Dijes", "prefijo": "DI" },
-      { "nombre": "Pulseras", "prefijo": "PU" },
-      { "nombre": "Tobilleras", "prefijo": "TO" },
-      { "nombre": "Aros", "prefijo": "AR" },
-      { "nombre": "Anillos", "prefijo": "AN" }
+    "medidas": [
+      "40 cm",
+      "45 cm",
+      "50 cm",
+      "55 cm",
+      "60 cm",
+      "80"
     ],
-    "materiales": ["Acero", "Acero blanco", "Plata", "Cristal", "Plata y Oro", "Otro"]
+    "categorias": [
+      {
+        "nombre": "Collares",
+        "prefijo": "CO"
+      },
+      {
+        "nombre": "Cadenas",
+        "prefijo": "CA"
+      },
+      {
+        "nombre": "Dijes",
+        "prefijo": "DI"
+      },
+      {
+        "nombre": "Pulseras",
+        "prefijo": "PU"
+      },
+      {
+        "nombre": "Tobilleras",
+        "prefijo": "TO"
+      },
+      {
+        "nombre": "Aros",
+        "prefijo": "AR"
+      },
+      {
+        "nombre": "Anillos",
+        "prefijo": "AN"
+      }
+    ],
+    "materiales": [
+      "Acero",
+      "Acero blanco",
+      "Plata",
+      "Cristal",
+      "Plata y Oro",
+      "Otro",
+      "Acero Dorado"
+    ]
   }
 }
