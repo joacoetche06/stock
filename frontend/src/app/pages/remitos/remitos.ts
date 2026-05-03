@@ -113,7 +113,8 @@ export class RemitosComponent {
 
   productosDisponibles = computed(() => {
     const busqueda = this.terminoBusqueda().toLowerCase();
-    return this.productos().filter((p) => {
+    
+    const filtrados = this.productos().filter((p) => {
       if (p.stock_disponible <= 0) return false;
       if (!busqueda) return true;
       return (
@@ -122,6 +123,13 @@ export class RemitosComponent {
         (p.categoria?.toLowerCase() || '').includes(busqueda) ||
         (p.material?.toLowerCase() || '').includes(busqueda)
       );
+    });
+
+    // ORDENAMIENTO ALFANUMÉRICO INTELIGENTE (AN01 antes que AN10)
+    return filtrados.sort((a, b) => {
+      const codA = a.codigo || '';
+      const codB = b.codigo || '';
+      return codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
     });
   });
 

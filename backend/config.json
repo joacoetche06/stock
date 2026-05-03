@@ -25,9 +25,10 @@
       { "nombre": "Cadenas", "prefijo": "CA" },
       { "nombre": "Dijes", "prefijo": "DI" },
       { "nombre": "Pulseras", "prefijo": "PU" },
+      { "nombre": "Tobilleras", "prefijo": "TO" },
       { "nombre": "Aros", "prefijo": "AR" },
       { "nombre": "Anillos", "prefijo": "AN" }
     ],
-    "materiales": ["Acero", "Acero blanco", "Plata", "Cristal", "Otro"]
+    "materiales": ["Acero", "Acero blanco", "Plata", "Cristal", "Plata y Oro", "Otro"]
   }
 }

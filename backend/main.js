@@ -45,10 +45,13 @@ ipcMain.handle('generar-pdf-nativo', async (event, { nombreArchivo }) => {
   if (!filePath) return false; // Usuario canceló
 
   try {
-    // 🪄 LA MAGIA: Generar PDF directamente usando CSS print
+    // 🪄 LA MAGIA: Generar PDF directamente usando CSS print y pie de página
     const data = await webContents.printToPDF({
-      printBackground: true, // Incluye colores de fondo
-      margins: { marginType: 'none' }, // Deja que el CSS maneje los márgenes
+      printBackground: true,
+      displayHeaderFooter: true, // Activamos encabezado y pie de página
+      headerTemplate: '<span></span>', // Vacío para que no ponga la fecha arriba
+      footerTemplate: '<div style="width: 100%; text-align: right; font-size: 11px; padding-right: 20px; font-family: Arial, sans-serif; color: #555;">Hoja <span class="pageNumber"></span> de <span class="totalPages"></span></div>',
+      margins: { marginType: 'default' }, // Dejamos que Electron calcule el espacio para el pie
       pageSize: 'A4',
       landscape: false
     });

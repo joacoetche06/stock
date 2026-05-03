@@ -5,9 +5,9 @@
    ========================================= */
 @media print {
   /* 1. Margen mínimo para borrar los textos del navegador (URL, Fecha autogenerada) */
-  @page {
-    size: A4 portrait;
-    margin: 0.5cm;
+  @page { 
+    size: A4 portrait; 
+    margin: 0.5cm 0.5cm 1.5cm 0.5cm; /* Arriba, Derecha, Abajo (más grande), Izquierda */
   }
 
   /* 2. Matamos las alturas forzadas para ELIMINAR LA HOJA EXTRA en blanco */
