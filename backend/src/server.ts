@@ -20,19 +20,33 @@ interface Product {
 const app = express();
 
 // ============================================================
-// CARGA DE CONFIGURACIÓN CENTRAL
+// CARGA DE CONFIGURACIÓN CENTRAL (AHORA DINÁMICA)
 // ============================================================
-const rutaConfig = path.join(__dirname, "..", "config.json");
+// 1. Definimos la ruta segura (AppData en prod, o la carpeta del proyecto en dev)
+const rutaSegura = process.env.USER_DATA_PATH || path.join(__dirname, "..");
+
+// 2. Dónde está el config de fábrica y dónde va a vivir el editable
+const rutaConfigOriginal = path.join(__dirname, "..", "config.json");
+const rutaConfigDinamica = path.join(rutaSegura, "config.json");
+
 let CONFIG: any = {};
 
 try {
-  const raw = fs.readFileSync(rutaConfig, "utf-8");
+  // 3. Si no existe en AppData (primera vez que se abre el instalador), lo copiamos
+  if (!fs.existsSync(rutaConfigDinamica)) {
+    if (fs.existsSync(rutaConfigOriginal)) {
+      fs.copyFileSync(rutaConfigOriginal, rutaConfigDinamica);
+    } else {
+      fs.writeFileSync(rutaConfigDinamica, "{}");
+    }
+  }
+  
+  // 4. Leemos siempre desde la ruta dinámica (editable)
+  const raw = fs.readFileSync(rutaConfigDinamica, "utf-8");
   CONFIG = JSON.parse(raw);
   console.log(`✅ Config cargada: ${CONFIG.negocio?.nombre}`);
 } catch (e) {
-  console.error(
-    "❌ No se pudo leer config.json. Asegurate de que exista en la raíz del backend.",
-  );
+  console.error("❌ No se pudo inicializar config.json:", e);
   process.exit(1);
 }
 
@@ -45,7 +59,6 @@ app.use(express.json());
 // Variable global para la base de datos
 let db: any;
 
-const rutaSegura = process.env.USER_DATA_PATH || path.join(__dirname, "..");
 const dbPath = path.join(
   rutaSegura,
   CONFIG.app?.nombreBD || "stock-app.sqlite",
@@ -143,7 +156,7 @@ app.post("/api/config", (req, res) => {
   try {
     const nuevaConfig = req.body;
     // Sobrescribimos el archivo físico
-    fs.writeFileSync(rutaConfig, JSON.stringify(nuevaConfig, null, 2), "utf-8");
+    fs.writeFileSync(rutaConfigDinamica, JSON.stringify(nuevaConfig, null, 2), "utf-8");
     // Actualizamos la variable en memoria del servidor
     CONFIG = nuevaConfig; 
     res.json({ mensaje: "Configuración actualizada correctamente" });

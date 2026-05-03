@@ -346,8 +346,13 @@ export class ProductosComponent {
         
         nuevaConfig.inventario.materiales.push(nuevoMaterial);
         
-        this.configService.actualizarConfig(nuevaConfig).subscribe(() => {
-          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Material agregado', showConfirmButton: false, timer: 2000 });
+        this.configService.actualizarConfig(nuevaConfig).subscribe({
+          next: () => {
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Guardado correctamente', showConfirmButton: false, timer: 2000 });
+          },
+          error: () => {
+            Swal.fire('Error', 'Hubo un problema al intentar guardar.', 'error');
+          }
         });
       }
     }
@@ -388,8 +393,13 @@ export class ProductosComponent {
         
         nuevaConfig.inventario.categorias.push(formValues);
         
-        this.configService.actualizarConfig(nuevaConfig).subscribe(() => {
-          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Categoría agregada', showConfirmButton: false, timer: 2000 });
+        this.configService.actualizarConfig(nuevaConfig).subscribe({
+          next: () => {
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Guardado correctamente', showConfirmButton: false, timer: 2000 });
+          },
+          error: () => {
+            Swal.fire('Error', 'Hubo un problema al intentar guardar.', 'error');
+          }
         });
       }
     }
@@ -418,8 +428,13 @@ export class ProductosComponent {
         
         nuevaConfig.inventario.medidas.push(nuevaMedida);
         
-        this.configService.actualizarConfig(nuevaConfig).subscribe(() => {
-          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Medida agregada', showConfirmButton: false, timer: 2000 });
+        this.configService.actualizarConfig(nuevaConfig).subscribe({
+          next: () => {
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Guardado correctamente', showConfirmButton: false, timer: 2000 });
+          },
+          error: () => {
+            Swal.fire('Error', 'Hubo un problema al intentar guardar.', 'error');
+          }
         });
       }
     }

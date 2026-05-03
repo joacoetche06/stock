@@ -11,17 +11,31 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const app = (0, express_1.default)();
 // ============================================================
-// CARGA DE CONFIGURACIÓN CENTRAL
+// CARGA DE CONFIGURACIÓN CENTRAL (AHORA DINÁMICA)
 // ============================================================
-const rutaConfig = path_1.default.join(__dirname, "..", "config.json");
+// 1. Definimos la ruta segura (AppData en prod, o la carpeta del proyecto en dev)
+const rutaSegura = process.env.USER_DATA_PATH || path_1.default.join(__dirname, "..");
+// 2. Dónde está el config de fábrica y dónde va a vivir el editable
+const rutaConfigOriginal = path_1.default.join(__dirname, "..", "config.json");
+const rutaConfigDinamica = path_1.default.join(rutaSegura, "config.json");
 let CONFIG = {};
 try {
-    const raw = fs_1.default.readFileSync(rutaConfig, "utf-8");
+    // 3. Si no existe en AppData (primera vez que se abre el instalador), lo copiamos
+    if (!fs_1.default.existsSync(rutaConfigDinamica)) {
+        if (fs_1.default.existsSync(rutaConfigOriginal)) {
+            fs_1.default.copyFileSync(rutaConfigOriginal, rutaConfigDinamica);
+        }
+        else {
+            fs_1.default.writeFileSync(rutaConfigDinamica, "{}");
+        }
+    }
+    // 4. Leemos siempre desde la ruta dinámica (editable)
+    const raw = fs_1.default.readFileSync(rutaConfigDinamica, "utf-8");
     CONFIG = JSON.parse(raw);
     console.log(`✅ Config cargada: ${CONFIG.negocio?.nombre}`);
 }
 catch (e) {
-    console.error("❌ No se pudo leer config.json. Asegurate de que exista en la raíz del backend.");
+    console.error("❌ No se pudo inicializar config.json:", e);
     process.exit(1);
 }
 const PORT = CONFIG.app?.puerto || 3001;
@@ -30,7 +44,6 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // Variable global para la base de datos
 let db;
-const rutaSegura = process.env.USER_DATA_PATH || path_1.default.join(__dirname, "..");
 const dbPath = path_1.default.join(rutaSegura, CONFIG.app?.nombreBD || "stock-app.sqlite");
 // ============================================================
 // INICIALIZACIÓN DE BASE DE DATOS
@@ -120,7 +133,7 @@ app.post("/api/config", (req, res) => {
     try {
         const nuevaConfig = req.body;
         // Sobrescribimos el archivo físico
-        fs_1.default.writeFileSync(rutaConfig, JSON.stringify(nuevaConfig, null, 2), "utf-8");
+        fs_1.default.writeFileSync(rutaConfigDinamica, JSON.stringify(nuevaConfig, null, 2), "utf-8");
         // Actualizamos la variable en memoria del servidor
         CONFIG = nuevaConfig;
         res.json({ mensaje: "Configuración actualizada correctamente" });
