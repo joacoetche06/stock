@@ -33,7 +33,7 @@ table {
 }
 
 thead th {
-  background-color: var(--color-texto) !important;
+  /* background-color: var(--color-texto) !important; */
   color: var(--color-blanco);
   padding: 16px 12px; /* ¡Más aire en la cabecera! */
   font-weight: 600;
@@ -368,12 +368,13 @@ select.input-form:-moz-focusring {
     break-inside: avoid !important;
   }
 
-  /* 7. Espaciado en celdas para que no se aprieten */
+  /* 7. Espaciado y color en celdas */
   #zona-impresion th, #zona-impresion td,
   #ticket-liquidacion th, #ticket-liquidacion td,
   #registro-pagos th, #registro-pagos td {
     padding: 8px !important; 
     word-wrap: normal !important;
     white-space: normal !important; 
+    color: var(--color-texto) !important; /* FORZAMOS LETRA AZULADA */
   }
 }
