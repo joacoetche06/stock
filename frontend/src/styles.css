@@ -32,13 +32,14 @@ table {
 }
 
 thead th {
-  /* background-color: var(--color-texto) !important; */
-  color: var(--color-texto); /* <--- CAMBIAR BLANCO POR TEXTO */
-  padding: 16px 12px; /* ¡Más aire en la cabecera! */
+  /* Al sacar el background, cambiamos el color de la letra a oscuro */
+  color: var(--color-texto) !important;
+  background-color: #f8f9fa !important; /* Un gris muy clarito para que resalte en pantalla sin gastar tinta */
+  border-bottom: 2px solid var(--color-principal) !important;
+  padding: 16px 12px;
   font-weight: 600;
   font-size: 0.9em;
-  text-transform: uppercase; /* Los títulos en mayúscula quedan más pro */
-  letter-spacing: 0.5px; /* Apenas un respiro entre letras */
+  text-transform: uppercase;
 }
 
 /* --- EL SECRETO PARA QUE NO ESTÉN PEGADAS --- */

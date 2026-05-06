@@ -432,16 +432,18 @@
           "
         >
           <div
+            class="tarjeta"
             style="
-              background: white;
-              border-radius: 12px;
-              padding: 25px;
-              width: 95%;
-
-              box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-              max-height: 90vh;
+              width: 85%; /* 👈 Lo bajamos a 85% para que tenga un buen margen derecho e izquierdo */
+              max-width: 1100px;
+              max-height: 85vh;
               overflow-y: auto;
+              padding: 35px;
+              margin: 20px; /* 👈 Le da aire arriba y abajo */
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+              position: relative;
             "
+            (click)="$event.stopPropagation()"
           >
             <div
               style="
@@ -489,11 +491,26 @@
                   border-radius: 4px;
                 "
               />
+
+              <!-- EL BOTÓN MÁGICO ALINEADO A LA DERECHA -->
+              <button
+                (click)="autocompletarDevoluciones()"
+                class="btn"
+                style="
+                  margin-left: auto;
+                  background-color: #17a2b8;
+                  color: white;
+                  padding: 8px 15px;
+                "
+                title="Llena automáticamente como 'Devuelto' lo que no marcaste como vendido"
+              >
+                🪄 Autocompletar Devoluciones
+              </button>
             </div>
 
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px">
               <thead>
-                <tr style="background-color: #343a40; color: white; text-align: left">
+                <tr style="background-color: #343a40; color: var(--color-texto); text-align: left">
                   <th style="padding: 12px; border-radius: 8px 0 0 0">
                     {{ nombreProducto | titlecase }}
                   </th>

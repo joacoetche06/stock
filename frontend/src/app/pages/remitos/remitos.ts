@@ -113,8 +113,7 @@ export class RemitosComponent {
 
   productosDisponibles = computed(() => {
     const busqueda = this.terminoBusqueda().toLowerCase();
-
-    const filtrados = this.productos().filter((p) => {
+    return this.productos().filter((p) => {
       if (p.stock_disponible <= 0) return false;
       if (!busqueda) return true;
       return (
@@ -123,13 +122,6 @@ export class RemitosComponent {
         (p.categoria?.toLowerCase() || '').includes(busqueda) ||
         (p.material?.toLowerCase() || '').includes(busqueda)
       );
-    });
-
-    // ORDENAMIENTO ALFANUMÉRICO INTELIGENTE (AN01 antes que AN10)
-    return filtrados.sort((a, b) => {
-      const codA = a.codigo || '';
-      const codB = b.codigo || '';
-      return codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
     });
   });
 
@@ -402,7 +394,7 @@ export class RemitosComponent {
           ...item,
           cantidad_entregada: item.cantidad_entregada || item.cantidad,
           cantidad_vendida: 0,
-          cantidad_devuelta: 0, // <--- CAMBIO ACÁ: Forzamos a que arranque en 0
+          cantidad_devuelta: item.cantidad_entregada || item.cantidad,
         }));
         this.itemsLiquidacion.set(itemsClonados);
         this.comisionPorcentaje = this.configService.comisionDefault;
@@ -449,19 +441,7 @@ export class RemitosComponent {
     const remito = this.remitoLiquidacion();
     if (!remito) return;
 
-    for (const item of this.itemsLiquidacion()) {
-      const suma = (item.cantidad_vendida || 0) + (item.cantidad_devuelta || 0);
-      if (suma !== item.cantidad_entregada) {
-        Swal.fire({
-          title: 'Faltan declarar productos',
-          html: `Revisá el código <b>${item.codigo}</b>.<br>Se entregaron ${item.cantidad_entregada}, pero hay ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos.`,
-          icon: 'warning',
-          confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
-        });
-        return;
-      }
-    }
-
+    // Calculamos el total exacto que se guarda en la BD
     const totalRendirCalculado = this.totalNeto();
 
     const datosCierre = {
@@ -524,5 +504,36 @@ export class RemitosComponent {
         });
       }
     });
+  }
+
+  autocompletarDevoluciones() {
+    let cambios = false;
+    const items = this.itemsLiquidacion();
+
+    items.forEach((item) => {
+      const suma = (item.cantidad_vendida || 0) + (item.cantidad_devuelta || 0);
+
+      // Si la fila no está balanceada (o sea, si Adri no la tocó para nada)
+      if (suma !== item.cantidad_entregada) {
+        // Mantenemos lo que haya marcado como vendido, y el resto lo pasamos a devolución automático
+        item.cantidad_devuelta = item.cantidad_entregada - (item.cantidad_vendida || 0);
+        cambios = true;
+      }
+    });
+
+    if (cambios) {
+      // Si hizo cambios, recalculamos la plata y mostramos un cartelito amigable
+      this.calcularTotalNeto();
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Devoluciones autocompletadas',
+        showConfirmButton: false,
+        timer: 2000,
+      });
+    } else {
+      Swal.fire('Todo listo', 'No había filas incompletas.', 'info');
+    }
   }
 }
