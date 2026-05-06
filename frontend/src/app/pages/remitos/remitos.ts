@@ -113,7 +113,7 @@ export class RemitosComponent {
 
   productosDisponibles = computed(() => {
     const busqueda = this.terminoBusqueda().toLowerCase();
-    
+
     const filtrados = this.productos().filter((p) => {
       if (p.stock_disponible <= 0) return false;
       if (!busqueda) return true;
@@ -178,10 +178,10 @@ export class RemitosComponent {
 
     const payload = {
       vendedor_id: vendId,
-      items: items.map((item) => ({ 
-        producto_id: item.producto_id, 
+      items: items.map((item) => ({
+        producto_id: item.producto_id,
         cantidad: item.cantidad,
-        precio: item.precio // <-- FUNDAMENTAL QUE SE GUARDE
+        precio: item.precio, // <-- FUNDAMENTAL QUE SE GUARDE
       })),
     };
 
@@ -248,7 +248,7 @@ export class RemitosComponent {
             items,
             totalNeto: suma,
             totalVendido: sumaTotalVendido, // <-- LO GUARDAMOS EN EL TICKET
-            idRemito: remito.id // <-- LO GUARDAMOS PARA USARLO EN EL PDF Nativo
+            idRemito: remito.id, // <-- LO GUARDAMOS PARA USARLO EN EL PDF Nativo
           });
         } else {
           this.ticketImpresion.set(null);
@@ -377,16 +377,22 @@ export class RemitosComponent {
 
   imprimirVistaActual() {
     // ELIMINAMOS el Swal.fire previo porque bloqueaba la pantalla al imprimir
-    this.remitoService.solicitarPdfNativo(this.remitoEnDetalle().id, this.remitoEnDetalle().vendedor, this.vistaDetalleActual()).subscribe({
-      next: (exito) => {
-        if (exito) {
-          Swal.fire('¡Éxito!', 'El PDF se guardó correctamente.', 'success');
-        }
-      },
-      error: () => {
-        Swal.fire('Error', 'No se pudo generar el PDF nativo.', 'error');
-      }
-    });
+    this.remitoService
+      .solicitarPdfNativo(
+        this.remitoEnDetalle().id,
+        this.remitoEnDetalle().vendedor,
+        this.vistaDetalleActual(),
+      )
+      .subscribe({
+        next: (exito) => {
+          if (exito) {
+            Swal.fire('¡Éxito!', 'El PDF se guardó correctamente.', 'success');
+          }
+        },
+        error: () => {
+          Swal.fire('Error', 'No se pudo generar el PDF nativo.', 'error');
+        },
+      });
   }
   abrirModalLiquidacion(remito: any) {
     this.remitoLiquidacion.set(remito);
@@ -396,7 +402,7 @@ export class RemitosComponent {
           ...item,
           cantidad_entregada: item.cantidad_entregada || item.cantidad,
           cantidad_vendida: 0,
-          cantidad_devuelta: item.cantidad_entregada || item.cantidad,
+          cantidad_devuelta: 0, // <--- CAMBIO ACÁ: Forzamos a que arranque en 0
         }));
         this.itemsLiquidacion.set(itemsClonados);
         this.comisionPorcentaje = this.configService.comisionDefault;
@@ -440,30 +446,46 @@ export class RemitosComponent {
   }
 
   confirmarCierreYTicket() {
-  const remito = this.remitoLiquidacion();
-  if (!remito) return;
+    const remito = this.remitoLiquidacion();
+    if (!remito) return;
 
-  // Calculamos el total exacto que se guarda en la BD
-  const totalRendirCalculado = this.totalNeto(); 
+    for (const item of this.itemsLiquidacion()) {
+      const suma = (item.cantidad_vendida || 0) + (item.cantidad_devuelta || 0);
+      if (suma !== item.cantidad_entregada) {
+        Swal.fire({
+          title: 'Faltan declarar productos',
+          html: `Revisá el código <b>${item.codigo}</b>.<br>Se entregaron ${item.cantidad_entregada}, pero hay ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos.`,
+          icon: 'warning',
+          confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
+        });
+        return;
+      }
+    }
 
-  const datosCierre = { 
-    items: this.itemsLiquidacion(), 
-    comision: this.comisionPorcentaje,
-    total_rendir: totalRendirCalculado // <-- NUEVO: Enviamos el total al backend
-  };
+    const totalRendirCalculado = this.totalNeto();
 
-  Swal.fire({ title: 'Liquidando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const datosCierre = {
+      items: this.itemsLiquidacion(),
+      comision: this.comisionPorcentaje,
+      total_rendir: totalRendirCalculado, // <-- NUEVO: Enviamos el total al backend
+    };
 
-  this.remitoService.cerrarRemito(remito.id, datosCierre).subscribe({
-    next: () => {
-      Swal.fire('¡Éxito!', 'Remito cerrado y deuda registrada.', 'success');
-      this.cerrarModalLiquidacion();
-      this.cargarHistorialRemitos();
-      this.cerrarDetalle();
-    },
-    error: () => Swal.fire('Error', 'No se pudo cerrar el remito.', 'error')
-  });
-}
+    Swal.fire({
+      title: 'Liquidando...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    this.remitoService.cerrarRemito(remito.id, datosCierre).subscribe({
+      next: () => {
+        Swal.fire('¡Éxito!', 'Remito cerrado y deuda registrada.', 'success');
+        this.cerrarModalLiquidacion();
+        this.cargarHistorialRemitos();
+        this.cerrarDetalle();
+      },
+      error: () => Swal.fire('Error', 'No se pudo cerrar el remito.', 'error'),
+    });
+  }
 
   // Helper para el template: categorías agrupadas para imprimir
   get categoriasParaImpresion(): string[] {
@@ -471,11 +493,11 @@ export class RemitosComponent {
   }
 
   registrarPago(remito: any) {
-  const deuda = remito.total_rendir - remito.abonado;
+    const deuda = remito.total_rendir - remito.abonado;
 
-  Swal.fire({
-    title: `Pago - Remito #${remito.id}`,
-    html: `
+    Swal.fire({
+      title: `Pago - Remito #${remito.id}`,
+      html: `
       <div style="text-align: left;">
         <p><b>Vendedora:</b> ${remito.vendedor}</p>
         <p><b>Deuda actual:</b> <span style="color: #dc3545; font-weight:bold;">$${deuda.toLocaleString()}</span></p>
@@ -483,24 +505,24 @@ export class RemitosComponent {
         <label>Monto entregado por la vendedora:</label>
       </div>
     `,
-    input: 'number',
-    inputAttributes: { min: '1', max: deuda.toString(), step: '1' },
-    inputValue: deuda,
-    showCancelButton: true,
-    confirmButtonText: 'Registrar Cobro',
-    confirmButtonColor: '#28a745',
-    cancelButtonText: 'Cancelar'
-  }).then((result) => {
-    if (result.isConfirmed && result.value > 0) {
-      this.remitoService.registrarPago(remito.id, Number(result.value)).subscribe({
-        next: () => {
-          Swal.fire('¡Cobrado!', 'El pago fue asentado correctamente.', 'success');
-          this.cargarHistorialRemitos();
-          this.cerrarDetalle();
-        },
-        error: () => Swal.fire('Error', 'No se pudo registrar el pago.', 'error')
-      });
-    }
-  });
-}
+      input: 'number',
+      inputAttributes: { min: '1', max: deuda.toString(), step: '1' },
+      inputValue: deuda,
+      showCancelButton: true,
+      confirmButtonText: 'Registrar Cobro',
+      confirmButtonColor: '#28a745',
+      cancelButtonText: 'Cancelar',
+    }).then((result) => {
+      if (result.isConfirmed && result.value > 0) {
+        this.remitoService.registrarPago(remito.id, Number(result.value)).subscribe({
+          next: () => {
+            Swal.fire('¡Cobrado!', 'El pago fue asentado correctamente.', 'success');
+            this.cargarHistorialRemitos();
+            this.cerrarDetalle();
+          },
+          error: () => Swal.fire('Error', 'No se pudo registrar el pago.', 'error'),
+        });
+      }
+    });
+  }
 }

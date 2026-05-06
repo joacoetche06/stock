@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
 
-
 /* src/styles.css */
 :root {
   --color-principal: #b87366; /* Cobre / Rose Gold del diamante */
@@ -34,7 +33,7 @@ table {
 
 thead th {
   /* background-color: var(--color-texto) !important; */
-  color: var(--color-blanco);
+  color: var(--color-texto); /* <--- CAMBIAR BLANCO POR TEXTO */
   padding: 16px 12px; /* ¡Más aire en la cabecera! */
   font-weight: 600;
   font-size: 0.9em;
@@ -266,14 +265,17 @@ select.input-form:-moz-focusring {
   padding: 8px 12px;
   border-radius: 6px;
   width: max-content;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  transition: opacity 0.2s, visibility 0.2s, bottom 0.2s;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  transition:
+    opacity 0.2s,
+    visibility 0.2s,
+    bottom 0.2s;
   z-index: 2000;
   pointer-events: none;
 }
 
 .contenedor-tooltip .tooltip-stock::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 100%;
   left: 50%;
@@ -289,7 +291,6 @@ select.input-form:-moz-focusring {
   bottom: 140%; /* Efecto de que flota un poquito para arriba */
 }
 
-
 /* --- ACTUALIZACIÓN EN styles.css --- */
 
 /* Creamos una clase base para que hereden el tamaño */
@@ -300,15 +301,17 @@ select.input-form:-moz-focusring {
 }
 
 /* Regla para AGRANDAR LA LETRA en serio */
-.seccion-impresion, 
-.seccion-impresion table, 
-.seccion-impresion p, 
-.seccion-impresion td, 
+.seccion-impresion,
+.seccion-impresion table,
+.seccion-impresion p,
+.seccion-impresion td,
 .seccion-impresion th {
   font-size: 18px !important; /* Adri pidió letra más grande */
 }
 
-.seccion-impresion h3, .seccion-impresion h4, .seccion-impresion .titulo-cat {
+.seccion-impresion h3,
+.seccion-impresion h4,
+.seccion-impresion .titulo-cat {
   font-size: 22px !important;
   font-weight: bold !important;
   color: #000 !important;
@@ -325,13 +328,18 @@ select.input-form:-moz-focusring {
    ========================================= */
 @media print {
   /* 1. Margen con más espacio abajo para que entre el "Hoja 1 de 2" */
-  @page { 
-    size: A4 portrait; 
-    margin: 0.5cm 0.5cm 1.5cm 0.5cm; 
+  @page {
+    size: A4 portrait;
+    margin: 0.5cm 0.5cm 1.5cm 0.5cm;
   }
-  
+
   /* 2. Destruimos la estructura de columnas y flexbox que bloquean el PDF */
-  html, body, .app-container, main, div, .tarjeta {
+  html,
+  body,
+  .app-container,
+  main,
+  div,
+  .tarjeta {
     display: block !important;
     position: static !important;
     width: auto !important;
@@ -343,17 +351,24 @@ select.input-form:-moz-focusring {
   }
 
   /* 3. Ocultamos toda la interfaz del programa */
-  body * { visibility: hidden; }
+  body * {
+    visibility: hidden;
+  }
 
   /* 4. Mostramos SOLO el interior de los tickets */
-  #zona-impresion, #zona-impresion *, 
-  #ticket-liquidacion, #ticket-liquidacion *, 
-  #registro-pagos, #registro-pagos * {
+  #zona-impresion,
+  #zona-impresion *,
+  #ticket-liquidacion,
+  #ticket-liquidacion *,
+  #registro-pagos,
+  #registro-pagos * {
     visibility: visible !important;
   }
 
   /* 5. Pegamos el ticket exactamente al borde del papel A4 */
-  #zona-impresion, #ticket-liquidacion, #registro-pagos {
+  #zona-impresion,
+  #ticket-liquidacion,
+  #registro-pagos {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -369,12 +384,15 @@ select.input-form:-moz-focusring {
   }
 
   /* 7. Espaciado y color en celdas */
-  #zona-impresion th, #zona-impresion td,
-  #ticket-liquidacion th, #ticket-liquidacion td,
-  #registro-pagos th, #registro-pagos td {
-    padding: 8px !important; 
+  #zona-impresion th,
+  #zona-impresion td,
+  #ticket-liquidacion th,
+  #ticket-liquidacion td,
+  #registro-pagos th,
+  #registro-pagos td {
+    padding: 8px !important;
     word-wrap: normal !important;
-    white-space: normal !important; 
+    white-space: normal !important;
     color: var(--color-texto) !important; /* FORZAMOS LETRA AZULADA */
   }
 }
