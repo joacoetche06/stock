@@ -158,17 +158,26 @@
                 style="display: flex; align-items: center; gap: 15px; flex: 0 0 auto"
                 (click)="$event.stopPropagation()"
               >
-                <span
-                  style="
-                    color: #28a745;
-                    font-size: 0.9em;
-                    font-weight: bold;
-                    white-space: nowrap;
-                    min-width: 55px;
-                    text-align: right;
-                  "
-                  >Disp: {{ p.stock_disponible }}</span
-                >
+                <div style="display: flex; flex-direction: column; align-items: flex-end">
+                  <span
+                    style="color: #28a745; font-size: 0.9em; font-weight: bold; white-space: nowrap"
+                    >Disp: {{ p.stock_disponible }}</span
+                  >
+                  <span
+                    *ngIf="cantidadEnCarrito(p.id!) > 0"
+                    style="
+                      color: var(--color-principal);
+                      font-size: 0.85em;
+                      font-weight: bold;
+                      background: var(--color-secundario);
+                      padding: 2px 6px;
+                      border-radius: 4px;
+                      margin-top: 3px;
+                    "
+                  >
+                    Ya en remito: {{ cantidadEnCarrito(p.id!) }}
+                  </span>
+                </div>
 
                 <div
                   style="
@@ -226,7 +235,16 @@
           "
         >
           <h4 style="margin-top: 0; color: var(--color-principal)">Detalle de entrega:</h4>
-          <ul style="padding-left: 0; list-style: none; margin: 0">
+          <ul
+            style="
+              padding-left: 0;
+              list-style: none;
+              margin: 0;
+              max-height: 250px;
+              overflow-y: auto;
+              padding-right: 10px;
+            "
+          >
             <li
               *ngFor="let item of itemsCarrito(); let i = index"
               style="

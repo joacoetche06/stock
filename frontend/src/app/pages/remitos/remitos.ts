@@ -292,6 +292,12 @@ export class RemitosComponent {
     this.pagosEnDetalle.set([]);
   }
 
+  // Nos dice cuántas unidades de un producto ya están cargadas en el remito actual
+  cantidadEnCarrito(productoId: number): number {
+    const item = this.itemsCarrito().find((i) => i.producto_id === productoId);
+    return item ? item.cantidad : 0;
+  }
+
   estaEnCarrito(productoId: number): boolean {
     return this.itemsCarrito().some((item) => item.producto_id === productoId);
   }
