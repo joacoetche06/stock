@@ -1,5 +1,6 @@
-<div style="display: flex; gap: 30px; align-items: flex-start; width: 100%">
-  <div style="flex: 1 1 50%; min-width: 0">
+<div style="display: flex; gap: 25px; align-items: flex-start; width: 100%">
+  
+  <div style="flex: 1 1 60%; min-width: 0">
     <div class="tarjeta">
       <h3
         style="
@@ -62,17 +63,31 @@
           2. Buscar y Seleccionar {{ nombreProductoPlural | titlecase }}:
         </label>
 
-        <div style="width: 100%; margin-bottom: 20px" (click)="$event.stopPropagation()">
-          <input
-            type="text"
-            [placeholder]="'🔍 Buscar ' + nombreProducto + ' (código, nombre, material)...'"
-            [ngModel]="terminoBusqueda()"
-            (ngModelChange)="buscarJoya($event)"
-            (focus)="mostrarDropdown.set(true)"
-            class="input-form"
-            style="width: 100%; box-sizing: border-box; font-size: 1.1em"
-            autocomplete="off"
-          />
+        <div (click)="$event.stopPropagation()" style="position: relative;">
+          <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 8px">
+            <select
+              class="input-form custom-select"
+              style="width: 35%; font-size: 1.1em;"
+              [ngModel]="categoriaSeleccionada()"
+              (ngModelChange)="categoriaSeleccionada.set($event); mostrarDropdown.set(true)"
+            >
+              <option value="">Todas las categorías</option>
+              <option *ngFor="let cat of categoriasDisponibles()" [value]="cat">
+                {{ cat | titlecase }}
+              </option>
+            </select>
+
+            <input
+              type="text"
+              [placeholder]="'🔍 Buscar (código, nombre)...'"
+              [ngModel]="terminoBusqueda()"
+              (ngModelChange)="buscarJoya($event)"
+              (focus)="mostrarDropdown.set(true)"
+              class="input-form"
+              style="width: 65%; box-sizing: border-box; font-size: 1.1em"
+              autocomplete="off"
+            />
+          </div> 
 
           <div
             *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
@@ -80,10 +95,12 @@
               background: #fff;
               border: 2px solid var(--color-principal);
               border-radius: 6px;
-              margin-top: 8px;
-              max-height: 350px;
+              max-height: 40vh;
               overflow-y: auto;
               box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+              position: absolute;
+              width: 100%;
+              z-index: 100;
             "
           >
             <div
@@ -122,99 +139,36 @@
                   "
                 />
                 <div style="display: flex; flex-direction: column; overflow: hidden">
-                  <span
-                    style="
-                      font-size: 1em;
-                      white-space: nowrap;
-                      overflow: hidden;
-                      text-overflow: ellipsis;
-                    "
-                  >
+                  <span style="font-size: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
                   </span>
-                  <span
-                    *ngIf="p.material"
-                    style="
-                      color: #6c757d;
-                      font-size: 0.85em;
-                      font-style: italic;
-                      white-space: nowrap;
-                      overflow: hidden;
-                      text-overflow: ellipsis;
-                    "
-                  >
-                    {{ p.material
-                    }}<span
-                      *ngIf="p.medida"
-                      style="font-weight: bold; color: var(--color-principal)"
-                    >
-                      - {{ p.medida }}</span
-                    >
+                  <span *ngIf="p.material" style="color: #6c757d; font-size: 0.85em; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    {{ p.material }}<span *ngIf="p.medida" style="font-weight: bold; color: var(--color-principal)"> - {{ p.medida }}</span>
                   </span>
                 </div>
               </label>
 
-              <div
-                style="display: flex; align-items: center; gap: 15px; flex: 0 0 auto"
-                (click)="$event.stopPropagation()"
-              >
+              <div style="display: flex; align-items: center; gap: 15px; flex: 0 0 auto" (click)="$event.stopPropagation()">
                 <div style="display: flex; flex-direction: column; align-items: flex-end">
-                  <span
-                    style="color: #28a745; font-size: 0.9em; font-weight: bold; white-space: nowrap"
-                    >Disp: {{ p.stock_disponible }}</span
-                  >
-                  <span
-                    *ngIf="cantidadEnCarrito(p.id!) > 0"
-                    style="
-                      color: var(--color-principal);
-                      font-size: 0.85em;
-                      font-weight: bold;
-                      background: var(--color-secundario);
-                      padding: 2px 6px;
-                      border-radius: 4px;
-                      margin-top: 3px;
-                    "
-                  >
+                  <span style="color: #28a745; font-size: 0.9em; font-weight: bold; white-space: nowrap">Disp: {{ p.stock_disponible }}</span>
+                  <span *ngIf="cantidadEnCarrito(p.id!) > 0" style="color: var(--color-principal); font-size: 0.85em; font-weight: bold; background: var(--color-secundario); padding: 2px 6px; border-radius: 4px; margin-top: 3px;">
                     Ya en remito: {{ cantidadEnCarrito(p.id!) }}
                   </span>
                 </div>
 
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    background: #fff;
-                    padding: 3px;
-                    border-radius: 6px;
-                    border: 1px solid #ced4da;
-                  "
-                >
+                <div style="display: flex; align-items: center; background: #fff; padding: 3px; border-radius: 6px; border: 1px solid #ced4da;">
                   <input
                     type="number"
                     #inputCant
                     value="1"
                     min="1"
                     [max]="p.stock_disponible"
-                    style="
-                      width: 45px;
-                      border: none;
-                      text-align: center;
-                      font-weight: bold;
-                      outline: none;
-                      background: transparent;
-                      height: 26px;
-                    "
+                    style="width: 45px; border: none; text-align: center; font-weight: bold; outline: none; background: transparent; height: 26px;"
                   />
                   <button
                     type="button"
                     class="btn btn-principal"
-                    style="
-                      padding: 0 12px;
-                      height: 28px;
-                      font-size: 12px;
-                      margin: 0;
-                      border-radius: 4px;
-                    "
+                    style="padding: 0 12px; height: 28px; font-size: 12px; margin: 0; border-radius: 4px;"
                     (click)="agregarAlCarritoConCantidad(p, inputCant.value, $event)"
                   >
                     Sumar
@@ -224,1000 +178,325 @@
             </div>
           </div>
         </div>
+      </div>
+    </div> <div
+      class="tarjeta"
+      style="display: flex; align-items: center; gap: 10px; background-color: #f1f3f5;"
+    >
+      <strong style="color: var(--color-texto)">🔍 Filtrar historial:</strong>
+      <div class="custom-select" style="min-width: 250px">
         <div
-          *ngIf="itemsCarrito().length > 0"
-          style="
-            background: #fdfaf9;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #f4d1d1;
-            margin-bottom: 20px;
-          "
+          class="select-header"
+          [class.abierto]="dropdownAbierto() === 'filtro-vend'"
+          (click)="toggleDropdown('filtro-vend', $event)"
         >
-          <h4 style="margin-top: 0; color: var(--color-principal)">Detalle de entrega:</h4>
-          <ul
-            style="
-              padding-left: 0;
-              list-style: none;
-              margin: 0;
-              max-height: 250px;
-              overflow-y: auto;
-              padding-right: 10px;
-            "
+          <span>{{ filtroVendedor() || 'Todos los ' + nombreVendedorPlural }}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#B87366"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [style.transform]="dropdownAbierto() === 'filtro-vend' ? 'rotate(180deg)' : 'rotate(0)'"
+            style="transition: transform 0.2s"
           >
-            <li
-              *ngFor="let item of itemsCarrito(); let i = index"
-              style="
-                margin-bottom: 10px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 5px;
-              "
-            >
-              <input
-                type="number"
-                [(ngModel)]="item.cantidad"
-                min="1"
-                [max]="item.stock_maximo"
-                class="input-form"
-                style="width: 65px; padding: 5px; font-weight: bold; text-align: center"
-              />
-              <span style="flex-grow: 1">
-                <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
-                <span style="font-size: 0.85em; color: #6c757d"
-                  >(Máx: {{ item.stock_maximo }})</span
-                >
-              </span>
-              <button
-                (click)="quitarDelRemito(i)"
-                class="btn btn-eliminar"
-                style="padding: 4px 8px; font-size: 0.85em"
-              >
-                Quitar
-              </button>
-            </li>
-          </ul>
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
         </div>
-
-        <div style="display: flex; gap: 10px">
-          <button
-            *ngIf="remitoEnEdicion()"
-            (click)="cancelarEdicionRemito()"
-            class="btn btn-secundario"
-            style="width: 30%"
-          >
-            ❌ Cancelar
-          </button>
-          <button (click)="guardarRemitoFinal()" class="btn btn-exito" style="flex-grow: 1">
-            💾 {{ remitoEnEdicion() ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y GUARDAR REMITO' }}
-          </button>
-        </div>
-
-        <!-- FILTRO HISTORIAL -->
-        <div
-          class="tarjeta"
-          style="
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            max-width: 800px;
-            background-color: #f1f3f5;
-          "
-        >
-          <strong style="color: var(--color-texto)">🔍 Filtrar historial:</strong>
-          <div class="custom-select" style="min-width: 250px">
-            <div
-              class="select-header"
-              [class.abierto]="dropdownAbierto() === 'filtro-vend'"
-              (click)="toggleDropdown('filtro-vend', $event)"
-            >
-              <span>{{ filtroVendedor() || 'Todos los ' + nombreVendedorPlural }}</span>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#B87366"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                [style.transform]="
-                  dropdownAbierto() === 'filtro-vend' ? 'rotate(180deg)' : 'rotate(0)'
-                "
-                style="transition: transform 0.2s"
-              >
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </div>
-            <div class="select-options" *ngIf="dropdownAbierto() === 'filtro-vend'">
-              <div class="option-item option-placeholder" (click)="setVendedorFiltro('')">
-                Todos los {{ nombreVendedorPlural }}
-              </div>
-              <div
-                class="option-item"
-                *ngFor="let v of vendedores()"
-                (click)="setVendedorFiltro(v.nombre)"
-              >
-                {{ v.nombre }}
-              </div>
-            </div>
+        <div class="select-options" *ngIf="dropdownAbierto() === 'filtro-vend'">
+          <div class="option-item option-placeholder" (click)="setVendedorFiltro('')">
+            Todos los {{ nombreVendedorPlural }}
           </div>
-        </div>
-
-        <!-- TABLA HISTORIAL -->
-        <h3 style="color: var(--color-texto)">Historial de Remitos Emitidos</h3>
-        <table style="max-width: 800px">
-          <thead>
-            <tr>
-              <th style="text-align: center">Nro Remito</th>
-              <th style="text-align: center">Fecha</th>
-              <th style="text-align: center">{{ nombreVendedor | titlecase }}</th>
-              <th style="text-align: center">Estado</th>
-              <th style="text-align: center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              *ngFor="let r of remitosFiltrados()"
-              style="text-align: center; border-bottom: 1px solid #eee"
-            >
-              <td style="color: #6c757d; font-weight: bold"># {{ r.id }}</td>
-              <td>{{ r.fecha_salida }}</td>
-              <td>
-                <strong>{{ r.vendedor }}</strong>
-              </td>
-
-              <td>
-                <div *ngIf="r.estado === 'Pendiente'">
-                  <span style="color: #ffc107; font-weight: bold">Pendiente</span>
-                </div>
-                <div *ngIf="r.estado === 'Cerrado'">
-                  <div style="font-size: 0.85em">
-                    <div *ngIf="r.total_rendir - r.abonado > 0">
-                      <span style="color: #dc3545; font-weight: bold"
-                        >Debe: ${{ r.total_rendir - r.abonado | number: '1.0-0' }}</span
-                      >
-                      <br /><small>Total: ${{ r.total_rendir | number: '1.0-0' }}</small>
-                    </div>
-                    <div *ngIf="r.total_rendir - r.abonado <= 0">
-                      <span style="color: #28a745; font-weight: bold">✅ PAGADO</span>
-                    </div>
-                  </div>
-                </div>
-              </td>
-
-              <td style="display: flex; gap: 5px; justify-content: center">
-                <button
-                  (click)="abrirDetalle(r)"
-                  class="btn btn-secundario"
-                  style="padding: 6px 10px"
-                >
-                  Ver
-                </button>
-
-                <button
-                  *ngIf="r.estado === 'Cerrado' && r.total_rendir - r.abonado > 0"
-                  (click)="registrarPago(r)"
-                  class="btn btn-exito"
-                  style="padding: 6px 10px; background-color: #28a745"
-                >
-                  💰 Cobrar
-                </button>
-
-                <button
-                  *ngIf="r.estado === 'Pendiente'"
-                  (click)="editarRemitoHistorico(r)"
-                  class="btn btn-editar"
-                  style="padding: 6px 10px"
-                >
-                  ✏️ Editar
-                </button>
-                <button
-                  *ngIf="r.estado === 'Pendiente'"
-                  (click)="abrirModalLiquidacion(r)"
-                  class="btn btn-advertencia"
-                  style="padding: 6px 10px"
-                >
-                  💰 Liquidar
-                </button>
-              </td>
-            </tr>
-            <tr *ngIf="remitosFiltrados().length === 0">
-              <td colspan="5" style="text-align: center; padding: 30px; color: #6c757d">
-                Aún no se generaron remitos.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- MODAL LIQUIDACIÓN -->
-        <div
-          *ngIf="remitoLiquidacion()"
-          style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 1050;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(2px);
-          "
-        >
           <div
-            class="tarjeta"
-            style="
-              width: 85%; /* 👈 Lo bajamos a 85% para que tenga un buen margen derecho e izquierdo */
-              max-width: 1100px;
-              max-height: 85vh;
-              overflow-y: auto;
-              padding: 35px;
-              margin: 20px; /* 👈 Le da aire arriba y abajo */
-              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-              position: relative;
-            "
-            (click)="$event.stopPropagation()"
+            class="option-item"
+            *ngFor="let v of vendedores()"
+            (click)="setVendedorFiltro(v.nombre)"
           >
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-bottom: 2px solid #f1f3f5;
-                padding-bottom: 15px;
-                margin-bottom: 20px;
-              "
-            >
-              <h2 style="margin: 0; color: var(--color-principal); font-size: 1.6em">
-                Cerrar Remito - Rendición
-              </h2>
-              <span style="font-size: 1.2em; font-weight: bold; color: #495057"
-                >{{ nombreVendedor | titlecase }}: {{ remitoLiquidacion().vendedor }}</span
-              >
-            </div>
-
-            <div
-              style="
-                margin-bottom: 20px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                border-left: 5px solid var(--color-principal);
-              "
-            >
-              <strong style="font-size: 1.1em; color: #343a40">Porcentaje de Comisión (%):</strong>
-              <input
-                type="number"
-                [(ngModel)]="comisionPorcentaje"
-                (ngModelChange)="calcularTotalNeto()"
-                class="input-form"
-                style="
-                  width: 80px;
-                  text-align: center;
-                  font-size: 1.2em;
-                  font-weight: bold;
-                  padding: 6px;
-                  border: 1px solid #ced4da;
-                  border-radius: 4px;
-                "
-              />
-            </div>
-
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px">
-              <thead>
-                <tr style="background-color: #343a40; color: var(--color-texto); text-align: left">
-                  <th style="padding: 12px; border-radius: 8px 0 0 0">
-                    {{ nombreProducto | titlecase }}
-                  </th>
-                  <th style="padding: 12px; text-align: center">Llevó</th>
-                  <th style="padding: 12px; text-align: center">Vendió</th>
-                  <th style="padding: 12px; text-align: center">Devuelve</th>
-                  <th style="padding: 12px; text-align: right">Precio orig.</th>
-                  <th style="padding: 12px; text-align: right">Comisión</th>
-                  <th style="padding: 12px; text-align: right; border-radius: 0 8px 0 0">
-                    A liquidar
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  *ngFor="let item of itemsLiquidacion(); let i = index"
-                  style="border-bottom: 1px solid #dee2e6"
-                >
-                  <td style="padding: 12px">
-                    <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
-                  </td>
-                  <td
-                    style="padding: 12px; text-align: center; font-size: 1.2em; font-weight: bold"
-                  >
-                    {{ item.cantidad_entregada }}
-                  </td>
-                  <td style="padding: 12px; text-align: center">
-                    <input
-                      type="number"
-                      [(ngModel)]="item.cantidad_vendida"
-                      (ngModelChange)="actualizarCantidades(i, 'vendida')"
-                      min="0"
-                      [max]="item.cantidad_entregada"
-                      class="input-form"
-                      style="width: 70px; text-align: center; font-size: 1.1em"
-                    />
-                  </td>
-                  <td style="padding: 12px; text-align: center">
-                    <input
-                      type="number"
-                      [(ngModel)]="item.cantidad_devuelta"
-                      (ngModelChange)="actualizarCantidades(i, 'devuelta')"
-                      min="0"
-                      [max]="item.cantidad_entregada"
-                      class="input-form"
-                      style="width: 70px; text-align: center; font-size: 1.1em"
-                    />
-                  </td>
-                  <td style="padding: 12px; text-align: right; color: #6c757d">
-                    $ {{ item.precio | number: '1.0-0' }}
-                  </td>
-                  <td style="padding: 12px; text-align: right; color: #dc3545">
-                    - $ {{ (item.precio * comisionPorcentaje) / 100 | number: '1.0-0' }}
-                  </td>
-                  <td
-                    style="
-                      padding: 12px;
-                      text-align: right;
-                      font-weight: bold;
-                      color: #28a745;
-                      font-size: 1.1em;
-                    "
-                  >
-                    $
-                    {{
-                      (item.precio - (item.precio * comisionPorcentaje) / 100) *
-                        item.cantidad_vendida | number: '1.0-0'
-                    }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div
-              style="
-                background-color: #e8f5e9;
-                padding: 15px 20px;
-                border-radius: 8px;
-                text-align: right;
-                margin-bottom: 25px;
-              "
-            >
-              <strong style="font-size: 1.4em; color: #212529">
-                Total Neto a Rendir:
-                <span style="font-size: 1.3em; color: #28a745"
-                  >$ {{ totalNeto() | number: '1.0-0' }}</span
-                >
-              </strong>
-            </div>
-
-            <div style="display: flex; gap: 15px; justify-content: flex-end">
-              <button
-                (click)="cerrarModalLiquidacion()"
-                class="btn"
-                style="
-                  padding: 10px 20px;
-                  font-size: 1.1em;
-                  background: white;
-                  color: #dc3545;
-                  border: 1px solid #dc3545;
-                  border-radius: 6px;
-                  cursor: pointer;
-                "
-              >
-                Cancelar
-              </button>
-              <button
-                (click)="confirmarCierreYTicket()"
-                class="btn"
-                style="
-                  padding: 10px 20px;
-                  font-size: 1.1em;
-                  background: #343a40;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                "
-              >
-                ✔ Confirmar e Imprimir Ticket
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- DETALLE DEL REMITO -->
-        <div
-          *ngIf="remitoEnDetalle()"
-          class="tarjeta"
-          style="margin-top: 30px; background-color: #f8f9fa; max-width: 100%"
-        >
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 15px;
-            "
-          >
-            <h3 style="margin-top: 0; color: var(--color-texto)">
-              Detalle del Remito #{{ remitoEnDetalle().id }} - {{ remitoEnDetalle().vendedor }}
-            </h3>
-            <button (click)="cerrarDetalle()" class="btn btn-secundario">❌ Cerrar</button>
-          </div>
-
-          <div
-            *ngIf="remitoEnDetalle().estado === 'Cerrado'"
-            style="
-              display: flex;
-              gap: 10px;
-              margin-bottom: 20px;
-              border-bottom: 2px solid #ccc;
-              padding-bottom: 15px;
-            "
-          >
-            <button
-              (click)="vistaDetalleActual.set('entrega')"
-              [class]="
-                vistaDetalleActual() === 'entrega' ? 'btn btn-principal' : 'btn btn-secundario'
-              "
-            >
-              📦 Remito de Entrega
-            </button>
-            <button
-              (click)="vistaDetalleActual.set('liquidacion')"
-              [class]="
-                vistaDetalleActual() === 'liquidacion' ? 'btn btn-exito' : 'btn btn-secundario'
-              "
-            >
-              💰 Ticket de Liquidación
-            </button>
-
-            <button
-              (click)="vistaDetalleActual.set('pagos')"
-              [class]="
-                vistaDetalleActual() === 'pagos' ? 'btn btn-advertencia' : 'btn btn-secundario'
-              "
-            >
-              📝 Historial de Pagos
-            </button>
-          </div>
-
-          <!-- VISTA ENTREGA -->
-          <div
-            *ngIf="vistaDetalleActual() === 'entrega'"
-            style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc"
-          >
-            <div
-              id="zona-impresion"
-              class="seccion-impresion"
-              style="background: white; padding: 20px; min-width: 850px"
-            >
-              <div style="text-align: center; margin-bottom: 20px">
-                <img src="logo.ico" alt="Logo" style="height: 100px; width: auto" />
-              </div>
-              <div style="margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 10px">
-                <p style="margin: 5px 0">
-                  <strong>Remito de consignación - {{ nombreVendedor | titlecase }}:</strong>
-                  {{ remitoEnDetalle().vendedor }}
-                </p>
-                <p style="margin: 5px 0">
-                  <strong>Fecha:</strong> {{ remitoEnDetalle().fecha_salida }} |
-                  <strong>Remito N°:</strong>
-                  {{ remitoEnDetalle().id }}
-                </p>
-              </div>
-
-              <div *ngFor="let categoria of categoriasParaImpresion">
-                <div *ngIf="itemsAgrupados()[categoria]">
-                  <table
-                    style="
-                      width: 100%;
-                      border-collapse: collapse;
-                      margin-bottom: 30px;
-                      font-size: 16px;
-                    "
-                  >
-                    <thead>
-                      <tr>
-                        <th
-                          colspan="7"
-                          style="
-                            color: var(--color-texto);
-                            text-align: left;
-                            padding: 15px;
-                            font-size: 1.4em;
-                            border: 2px solid var(--color-principal);
-                            border-bottom: none;
-                          "
-                        >
-                          SECCIÓN: {{ categoria | uppercase }}
-                        </th>
-                      </tr>
-                      <tr style="color: var(--color-principal)">
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: left;
-                            border: 2px solid var(--color-principal);
-                            width: 12%;
-                          "
-                        >
-                          Código
-                        </th>
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: left;
-                            border: 2px solid var(--color-principal);
-                            width: 40%;
-                          "
-                        >
-                          Producto
-                        </th>
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: left;
-                            border: 2px solid var(--color-principal);
-                            width: 15%;
-                          "
-                        >
-                          Material
-                        </th>
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: right;
-                            border: 2px solid var(--color-principal);
-                            width: 11%;
-                          "
-                        >
-                          Precio
-                        </th>
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: center;
-                            border: 2px solid var(--color-principal);
-                            width: 8%;
-                          "
-                        >
-                          Entregado
-                        </th>
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: center;
-                            border: 2px solid var(--color-principal);
-                            width: 7%;
-                          "
-                        >
-                          Vendido
-                        </th>
-                        <th
-                          style="
-                            padding: 8px;
-                            text-align: center;
-                            border: 2px solid var(--color-principal);
-                            width: 7%;
-                          "
-                        >
-                          Devuelto
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let item of itemsAgrupados()[categoria]">
-                        <td style="padding: 8px; border: 1px solid var(--color-principal)">
-                          {{ item.codigo }}
-                        </td>
-                        <td style="padding: 8px; border: 1px solid var(--color-principal)">
-                          {{ item.nombre }}
-                        </td>
-                        <td style="padding: 8px; border: 1px solid var(--color-principal)">
-                          {{ item.material }}
-                        </td>
-                        <td
-                          style="
-                            padding: 8px;
-                            text-align: right;
-                            border: 1px solid var(--color-principal);
-                          "
-                        >
-                          $ {{ item.precio }}
-                        </td>
-                        <td
-                          style="
-                            padding: 8px;
-                            text-align: center;
-                            border: 1px solid var(--color-principal);
-                            font-weight: bold;
-                          "
-                        >
-                          {{ item.cantidad_entregada }}
-                        </td>
-                        <td
-                          style="
-                            padding: 8px;
-                            text-align: center;
-                            border: 1px solid var(--color-principal);
-                            font-weight: bold;
-                          "
-                        >
-                          {{
-                            remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_vendida
-                          }}
-                        </td>
-                        <td
-                          style="
-                            padding: 8px;
-                            text-align: center;
-                            border: 1px solid var(--color-principal);
-                            font-weight: bold;
-                          "
-                        >
-                          {{
-                            remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_devuelta
-                          }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div style="margin-top: 30px; display: flex; justify-content: space-between">
-                <div style="width: 45%; border-top: 1px dashed #000; padding-top: 10px">
-                  <ng-container *ngIf="remitoEnDetalle().estado === 'Cerrado'">
-                    <p style="margin: 0">
-                      Total vendido:
-                      <strong style="font-size: 1.1em"
-                        >$ {{ ticketImpresion()?.totalVendido | number: '1.0-0' }}</strong
-                      >
-                    </p>
-                    <br />
-                    <p style="margin: 0">
-                      Dinero a rendir:
-                      <strong style="font-size: 1.1em; color: #28a745"
-                        >$ {{ ticketImpresion()?.totalNeto | number: '1.0-0' }}</strong
-                      >
-                    </p>
-                  </ng-container>
-
-                  <ng-container *ngIf="remitoEnDetalle().estado === 'Pendiente'">
-                    <p style="margin: 0">Total vendido:</p>
-                    <br />
-                    <p style="margin: 0">Dinero a rendir:</p>
-                  </ng-container>
-                </div>
-                <div
-                  style="
-                    width: 45%;
-                    border-top: 1px dashed #000;
-                    padding-top: 10px;
-                    text-align: center;
-                  "
-                >
-                  <p style="margin: 0">
-                    Firma {{ nombreVendedor }} ({{ remitoEnDetalle().vendedor }}):
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div
-            *ngIf="vistaDetalleActual() === 'liquidacion'"
-            style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc"
-          >
-            <div
-              id="ticket-liquidacion"
-              class="seccion-impresion"
-              style="
-                background: white;
-                padding: 30px;
-                font-family: Arial, sans-serif;
-                color: black;
-                min-width: 850px;
-              "
-            >
-              <div style="text-align: center; margin-bottom: 20px">
-                <img
-                  src="logo.ico"
-                  alt="Logo"
-                  style="height: 140px; width: auto; border-radius: 8px"
-                />
-                <h2 style="margin: 5px 0; font-size: 20px; text-transform: uppercase">
-                  Liquidación de Venta
-                </h2>
-                <p style="margin: 0; color: #555">{{ nombreNegocio }}</p>
-              </div>
-
-              <div
-                style="
-                  margin-bottom: 25px;
-                  border-bottom: 2px dashed #000;
-                  padding-bottom: 15px;
-                  font-size: 16px;
-                "
-              >
-                <p style="margin: 5px 0">
-                  <strong>REMITO</strong> {{ ticketImpresion()?.idRemito }}
-                </p>
-                <p style="margin: 5px 0">
-                  <strong>{{ nombreVendedor | titlecase }}:</strong>
-                  {{ ticketImpresion()?.vendedor }}
-                </p>
-                <p style="margin: 5px 0">
-                  <strong>Fecha de Cierre:</strong>
-                  {{ ticketImpresion()?.fecha | date: 'dd/MM/yyyy HH:mm' }}
-                </p>
-                <p style="margin: 5px 0">
-                  <strong>Comisión Aplicada:</strong> {{ ticketImpresion()?.comision }}%
-                </p>
-              </div>
-
-              <table
-                style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 15px"
-              >
-                <thead>
-                  <tr style="border: 2px solid var(--color-principal); color: var(--color-texto)">
-                    <th
-                      style="
-                        text-align: center;
-                        padding: 8px 0;
-                        border: 1px solid var(--color-principal);
-                        width: 10%;
-                      "
-                    >
-                      Cant.
-                    </th>
-                    <th
-                      style="
-                        text-align: center;
-                        padding: 8px 0;
-                        border: 1px solid var(--color-principal);
-                        width: 45%;
-                      "
-                    >
-                      Producto
-                    </th>
-                    <th
-                      style="
-                        text-align: center;
-                        padding: 8px 0;
-                        border: 1px solid var(--color-principal);
-                        width: 15%;
-                      "
-                    >
-                      Precio Original
-                    </th>
-                    <th
-                      style="
-                        text-align: center;
-                        padding: 8px 0;
-                        border: 1px solid var(--color-principal);
-                        width: 15%;
-                      "
-                    >
-                      Comisión
-                    </th>
-                    <th
-                      style="
-                        text-align: center;
-                        padding: 8px 0;
-                        border: 1px solid var(--color-principal);
-                        width: 15%;
-                      "
-                    >
-                      Valor a Liquidar
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <ng-container *ngFor="let item of ticketImpresion()?.items">
-                    <tr
-                      *ngIf="item.cantidad_vendida > 0"
-                      style="border-bottom: 1px solid var(--color-principal)"
-                    >
-                      <td
-                        style="
-                          padding: 8px 0;
-                          text-align: center;
-                          border: 1px solid var(--color-principal);
-                        "
-                      >
-                        {{ item.cantidad_vendida }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px 0;
-                          text-align: center;
-                          border: 1px solid var(--color-principal);
-                        "
-                      >
-                        {{ item.codigo }} - {{ item.nombre }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px 0;
-                          text-align: center;
-                          border: 1px solid var(--color-principal);
-                        "
-                      >
-                        $ {{ item.precio | number: '1.0-0' }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px 0;
-                          text-align: center;
-                          border: 1px solid var(--color-principal);
-                        "
-                      >
-                        - $
-                        {{ (item.precio * ticketImpresion()!.comision) / 100 | number: '1.0-0' }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px 0;
-                          text-align: center;
-                          font-weight: bold;
-                          border: 1px solid var(--color-principal);
-                        "
-                      >
-                        $
-                        {{
-                          (item.precio - (item.precio * ticketImpresion()!.comision) / 100) *
-                            item.cantidad_vendida | number: '1.0-0'
-                        }}
-                      </td>
-                    </tr>
-                  </ng-container>
-                </tbody>
-              </table>
-
-              <div
-                style="
-                  text-align: right;
-                  font-size: 22px;
-                  border-top: 2px solid #000;
-                  padding-top: 15px;
-                "
-              >
-                <strong
-                  >TOTAL A RENDIR:
-                  <span style="font-size: 26px"
-                    >$ {{ ticketImpresion()?.totalNeto | number: '1.0-0' }}</span
-                  ></strong
-                >
-              </div>
-            </div>
-          </div>
-
-          <div
-            *ngIf="vistaDetalleActual() === 'pagos'"
-            style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc"
-          >
-            <div
-              id="registro-pagos"
-              class="seccion-impresion"
-              style="background: white; padding: 20px; min-width: 850px"
-            >
-              <h3
-                style="
-                  margin-top: 0;
-                  color: var(--color-texto);
-                  border-bottom: 2px dashed #ccc;
-                  padding-bottom: 10px;
-                "
-              >
-                Registro de Cobros - Remito {{ remitoEnDetalle().id }} -
-                {{ remitoEnDetalle().vendedor }}
-              </h3>
-
-              <table style="width: 100%; border-collapse: collapse; margin-top: 15px">
-                <thead>
-                  <tr
-                    style="border: 2px solid var(--color-principal); color: var(--color-principal)"
-                  >
-                    <th
-                      style="
-                        padding: 10px;
-                        text-align: left;
-                        border: 1px solid var(--color-principal);
-                      "
-                    >
-                      Fecha y Hora
-                    </th>
-                    <th
-                      style="
-                        padding: 10px;
-                        text-align: right;
-                        border: 1px solid var(--color-principal);
-                      "
-                    >
-                      Monto Abonado
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let pago of pagosEnDetalle()">
-                    <td style="padding: 10px; border: 1px solid var(--color-principal)">
-                      📅 {{ pago.fecha | date: 'dd/MM/yyyy - HH:mm' }} hs
-                    </td>
-                    <td
-                      style="
-                        padding: 10px;
-                        border: 1px solid var(--color-principal);
-                        text-align: right;
-                        font-weight: bold;
-                      "
-                    >
-                      $ {{ pago.monto | number: '1.0-0' }}
-                    </td>
-                  </tr>
-                  <tr *ngIf="pagosEnDetalle().length === 0">
-                    <td
-                      colspan="2"
-                      style="
-                        padding: 20px;
-                        text-align: center;
-                        font-style: italic;
-                        border: 1px solid var(--color-principal);
-                      "
-                    >
-                      No hay pagos registrados para este remito todavía.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div
-                style="
-                  margin-top: 20px;
-                  text-align: right;
-                  font-size: 1.2em;
-                  background: #fdfaf9;
-                  padding: 15px;
-                  border-radius: 6px;
-                "
-              >
-                Deuda Restante:
-                <strong
-                  [style.color]="
-                    remitoEnDetalle().total_rendir - remitoEnDetalle().abonado > 0
-                      ? '#dc3545'
-                      : '#28a745'
-                  "
-                >
-                  $
-                  {{ remitoEnDetalle().total_rendir - remitoEnDetalle().abonado | number: '1.0-0' }}
-                </strong>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top: 20px; text-align: right">
-            <button (click)="imprimirVistaActual()" class="btn btn-principal">
-              💾 Guardar como PDF
-            </button>
+            {{ v.nombre }}
           </div>
         </div>
       </div>
     </div>
+
+    <h3 style="color: var(--color-texto)">Historial de Remitos Emitidos</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: center">Nro Remito</th>
+          <th style="text-align: center">Fecha</th>
+          <th style="text-align: center">{{ nombreVendedor | titlecase }}</th>
+          <th style="text-align: center">Estado</th>
+          <th style="text-align: center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of remitosFiltrados()" style="text-align: center; border-bottom: 1px solid #eee">
+          <td style="color: #6c757d; font-weight: bold"># {{ r.id }}</td>
+          <td>{{ r.fecha_salida }}</td>
+          <td><strong>{{ r.vendedor }}</strong></td>
+          <td>
+            <div *ngIf="r.estado === 'Pendiente'">
+              <span style="color: #ffc107; font-weight: bold">Pendiente</span>
+            </div>
+            <div *ngIf="r.estado === 'Cerrado'">
+              <div style="font-size: 0.85em">
+                <div *ngIf="r.total_rendir - r.abonado > 0">
+                  <span style="color: #dc3545; font-weight: bold">Debe: ${{ r.total_rendir - r.abonado | number: '1.0-0' }}</span>
+                  <br /><small>Total: ${{ r.total_rendir | number: '1.0-0' }}</small>
+                </div>
+                <div *ngIf="r.total_rendir - r.abonado <= 0">
+                  <span style="color: #28a745; font-weight: bold">✅ PAGADO</span>
+                </div>
+              </div>
+            </div>
+          </td>
+          <td style="display: flex; gap: 5px; justify-content: center">
+            <button (click)="abrirDetalle(r)" class="btn btn-secundario" style="padding: 6px 10px">Ver</button>
+            <button *ngIf="r.estado === 'Cerrado' && r.total_rendir - r.abonado > 0" (click)="registrarPago(r)" class="btn btn-exito" style="padding: 6px 10px; background-color: #28a745">💰 Cobrar</button>
+            <button *ngIf="r.estado === 'Pendiente'" (click)="editarRemitoHistorico(r)" class="btn btn-editar" style="padding: 6px 10px">✏️ Editar</button>
+            <button *ngIf="r.estado === 'Pendiente'" (click)="abrirModalLiquidacion(r)" class="btn btn-advertencia" style="padding: 6px 10px">💰 Liquidar</button>
+          </td>
+        </tr>
+        <tr *ngIf="remitosFiltrados().length === 0">
+          <td colspan="5" style="text-align: center; padding: 30px; color: #6c757d">Aún no se generaron remitos.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="flex: 1 1 40%; min-width: 0; position: sticky; top: 20px;">
+    <div class="tarjeta" style="border: 2px solid var(--color-principal); background: #fff;">
+      <h3 style="margin-top: 0; color: var(--color-principal); border-bottom: 2px solid var(--color-secundario); padding-bottom: 10px;">
+        🛒 Resumen del Remito
+      </h3>
+
+      <div *ngIf="itemsCarrito().length === 0" style="text-align: center; padding: 40px 20px; color: #6c757d; font-style: italic;">
+        El remito está vacío.<br>Seleccioná productos a la izquierda para armar la entrega.
+      </div>
+
+      <div *ngIf="itemsCarrito().length > 0" style="background: #fdfaf9; padding: 15px; border-radius: 8px; border: 1px solid #f4d1d1; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: var(--color-principal)">Detalle de entrega:</h4>
+        <ul style="padding-left: 0; list-style: none; margin: 0; max-height: 45vh; overflow-y: auto; padding-right: 10px;">
+          <li *ngFor="let item of itemsCarrito(); let i = index" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+            <input type="number" [(ngModel)]="item.cantidad" min="1" [max]="item.stock_maximo" class="input-form" style="width: 65px; padding: 5px; font-weight: bold; text-align: center" />
+            <span style="flex-grow: 1">
+              <strong>{{ item.codigo }}</strong> - {{ item.nombre }}
+              <span style="font-size: 0.85em; color: #6c757d">(Máx: {{ item.stock_maximo }})</span>
+            </span>
+            <button (click)="quitarDelRemito(i)" class="btn btn-eliminar" style="padding: 4px 8px; font-size: 0.85em">Quitar</button>
+          </li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 10px">
+        <button *ngIf="remitoEnEdicion()" (click)="cancelarEdicionRemito()" class="btn btn-secundario" style="width: 30%">❌ Cancelar</button>
+        <button (click)="guardarRemitoFinal()" class="btn btn-exito" style="flex-grow: 1">
+          💾 {{ remitoEnEdicion() ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y GUARDAR REMITO' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div *ngIf="remitoLiquidacion()" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1050; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
+  <div class="tarjeta" style="width: 85%; max-width: 1100px; max-height: 85vh; overflow-y: auto; padding: 35px; margin: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); position: relative;" (click)="$event.stopPropagation()">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; margin-bottom: 20px;">
+      <h2 style="margin: 0; color: var(--color-principal); font-size: 1.6em">Cerrar Remito - Rendición</h2>
+      <span style="font-size: 1.2em; font-weight: bold; color: #495057">{{ nombreVendedor | titlecase }}: {{ remitoLiquidacion().vendedor }}</span>
+    </div>
+
+    <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid var(--color-principal);">
+      <strong style="font-size: 1.1em; color: #343a40">Porcentaje de Comisión (%):</strong>
+      <input type="number" [(ngModel)]="comisionPorcentaje" (ngModelChange)="calcularTotalNeto()" class="input-form" style="width: 80px; text-align: center; font-size: 1.2em; font-weight: bold; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;" />
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px">
+      <thead>
+        <tr style="background-color: #343a40; color: var(--color-texto); text-align: left">
+          <th style="padding: 12px; border-radius: 8px 0 0 0">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 12px; text-align: center">Llevó</th>
+          <th style="padding: 12px; text-align: center">Vendió</th>
+          <th style="padding: 12px; text-align: center">Devuelve</th>
+          <th style="padding: 12px; text-align: right">Precio orig.</th>
+          <th style="padding: 12px; text-align: right">Comisión</th>
+          <th style="padding: 12px; text-align: right; border-radius: 0 8px 0 0">A liquidar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let item of itemsLiquidacion(); let i = index" style="border-bottom: 1px solid #dee2e6">
+          <td style="padding: 12px"><strong>{{ item.codigo }}</strong> - {{ item.nombre }}</td>
+          <td style="padding: 12px; text-align: center; font-size: 1.2em; font-weight: bold">{{ item.cantidad_entregada }}</td>
+          <td style="padding: 12px; text-align: center">
+            <input type="number" [(ngModel)]="item.cantidad_vendida" (ngModelChange)="actualizarCantidades(i, 'vendida')" min="0" [max]="item.cantidad_entregada" class="input-form" style="width: 70px; text-align: center; font-size: 1.1em" />
+          </td>
+          <td style="padding: 12px; text-align: center">
+            <input type="number" [(ngModel)]="item.cantidad_devuelta" (ngModelChange)="actualizarCantidades(i, 'devuelta')" min="0" [max]="item.cantidad_entregada" class="input-form" style="width: 70px; text-align: center; font-size: 1.1em" />
+          </td>
+          <td style="padding: 12px; text-align: right; color: #6c757d">$ {{ item.precio | number: '1.0-0' }}</td>
+          <td style="padding: 12px; text-align: right; color: #dc3545">- $ {{ (item.precio * comisionPorcentaje) / 100 | number: '1.0-0' }}</td>
+          <td style="padding: 12px; text-align: right; font-weight: bold; color: #28a745; font-size: 1.1em;">$ {{ (item.precio - (item.precio * comisionPorcentaje) / 100) * item.cantidad_vendida | number: '1.0-0' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="background-color: #e8f5e9; padding: 15px 20px; border-radius: 8px; text-align: right; margin-bottom: 25px;">
+      <strong style="font-size: 1.4em; color: #212529">Total Neto a Rendir: <span style="font-size: 1.3em; color: #28a745">$ {{ totalNeto() | number: '1.0-0' }}</span></strong>
+    </div>
+
+    <div style="display: flex; gap: 15px; justify-content: flex-end">
+      <button (click)="cerrarModalLiquidacion()" class="btn" style="padding: 10px 20px; font-size: 1.1em; background: white; color: #dc3545; border: 1px solid #dc3545; border-radius: 6px; cursor: pointer;">Cancelar</button>
+      <button (click)="confirmarCierreYTicket()" class="btn" style="padding: 10px 20px; font-size: 1.1em; background: #343a40; color: white; border: none; border-radius: 6px; cursor: pointer;">✔ Confirmar e Imprimir Ticket</button>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="remitoEnDetalle()" class="tarjeta" style="margin-top: 30px; background-color: #f8f9fa; max-width: 100%">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <h3 style="margin-top: 0; color: var(--color-texto)">Detalle del Remito #{{ remitoEnDetalle().id }} - {{ remitoEnDetalle().vendedor }}</h3>
+    <button (click)="cerrarDetalle()" class="btn btn-secundario">❌ Cerrar</button>
+  </div>
+
+  <div *ngIf="remitoEnDetalle().estado === 'Cerrado'" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ccc; padding-bottom: 15px;">
+    <button (click)="vistaDetalleActual.set('entrega')" [class]="vistaDetalleActual() === 'entrega' ? 'btn btn-principal' : 'btn btn-secundario'">📦 Remito de Entrega</button>
+    <button (click)="vistaDetalleActual.set('liquidacion')" [class]="vistaDetalleActual() === 'liquidacion' ? 'btn btn-exito' : 'btn btn-secundario'">💰 Ticket de Liquidación</button>
+    <button (click)="vistaDetalleActual.set('pagos')" [class]="vistaDetalleActual() === 'pagos' ? 'btn btn-advertencia' : 'btn btn-secundario'">📝 Historial de Pagos</button>
+  </div>
+
+  <div *ngIf="vistaDetalleActual() === 'entrega'" style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc">
+    <div id="zona-impresion" class="seccion-impresion" style="background: white; padding: 20px; min-width: 850px">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <img src="logo.ico" alt="Logo" style="height: 100px; width: auto" />
+      </div>
+      <div style="margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 10px">
+        <p style="margin: 5px 0"><strong>Remito de consignación - {{ nombreVendedor | titlecase }}:</strong> {{ remitoEnDetalle().vendedor }}</p>
+        <p style="margin: 5px 0"><strong>Fecha:</strong> {{ remitoEnDetalle().fecha_salida }} | <strong>Remito N°:</strong> {{ remitoEnDetalle().id }}</p>
+      </div>
+
+      <div *ngFor="let categoria of categoriasParaImpresion">
+        <div *ngIf="itemsAgrupados()[categoria]">
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 16px;">
+            <thead>
+              <tr>
+                <th colspan="7" style="color: var(--color-texto); text-align: left; padding: 15px; font-size: 1.4em; border: 2px solid var(--color-principal); border-bottom: none;">SECCIÓN: {{ categoria | uppercase }}</th>
+              </tr>
+              <tr style="color: var(--color-principal)">
+                <th style="padding: 8px; text-align: left; border: 2px solid var(--color-principal); width: 12%;">Código</th>
+                <th style="padding: 8px; text-align: left; border: 2px solid var(--color-principal); width: 40%;">Producto</th>
+                <th style="padding: 8px; text-align: left; border: 2px solid var(--color-principal); width: 15%;">Material</th>
+                <th style="padding: 8px; text-align: right; border: 2px solid var(--color-principal); width: 11%;">Precio</th>
+                <th style="padding: 8px; text-align: center; border: 2px solid var(--color-principal); width: 8%;">Entregado</th>
+                <th style="padding: 8px; text-align: center; border: 2px solid var(--color-principal); width: 7%;">Vendido</th>
+                <th style="padding: 8px; text-align: center; border: 2px solid var(--color-principal); width: 7%;">Devuelto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of itemsAgrupados()[categoria]">
+                <td style="padding: 8px; border: 1px solid var(--color-principal)">{{ item.codigo }}</td>
+                <td style="padding: 8px; border: 1px solid var(--color-principal)">{{ item.nombre }}</td>
+                <td style="padding: 8px; border: 1px solid var(--color-principal)">{{ item.material }}</td>
+                <td style="padding: 8px; text-align: right; border: 1px solid var(--color-principal)">$ {{ item.precio }}</td>
+                <td style="padding: 8px; text-align: center; border: 1px solid var(--color-principal); font-weight: bold;">{{ item.cantidad_entregada }}</td>
+                <td style="padding: 8px; text-align: center; border: 1px solid var(--color-principal); font-weight: bold;">{{ remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_vendida }}</td>
+                <td style="padding: 8px; text-align: center; border: 1px solid var(--color-principal); font-weight: bold;">{{ remitoEnDetalle().estado === 'Pendiente' ? '' : item.cantidad_devuelta }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px; display: flex; justify-content: space-between">
+        <div style="width: 45%; border-top: 1px dashed #000; padding-top: 10px">
+          <ng-container *ngIf="remitoEnDetalle().estado === 'Cerrado'">
+            <p style="margin: 0">Total vendido: <strong style="font-size: 1.1em">$ {{ ticketImpresion()?.totalVendido | number: '1.0-0' }}</strong></p>
+            <br><p style="margin: 0">Dinero a rendir: <strong style="font-size: 1.1em; color: #28a745">$ {{ ticketImpresion()?.totalNeto | number: '1.0-0' }}</strong></p>
+          </ng-container>
+          <ng-container *ngIf="remitoEnDetalle().estado === 'Pendiente'">
+            <p style="margin: 0">Total vendido:</p>
+            <br><p style="margin: 0">Dinero a rendir:</p>
+          </ng-container>
+        </div>
+        <div style="width: 45%; border-top: 1px dashed #000; padding-top: 10px; text-align: center;">
+          <p style="margin: 0">Firma {{ nombreVendedor }} ({{ remitoEnDetalle().vendedor }}):</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="vistaDetalleActual() === 'liquidacion'" style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc">
+    <div id="ticket-liquidacion" class="seccion-impresion" style="background: white; padding: 30px; font-family: Arial, sans-serif; color: black; min-width: 850px">
+      <div style="text-align: center; margin-bottom: 20px">
+        <img src="logo.ico" alt="Logo" style="height: 140px; width: auto; border-radius: 8px" />
+        <h2 style="margin: 5px 0; font-size: 20px; text-transform: uppercase">Liquidación de Venta</h2>
+        <p style="margin: 0; color: #555">{{ nombreNegocio }}</p>
+      </div>
+
+      <div style="margin-bottom: 25px; border-bottom: 2px dashed #000; padding-bottom: 15px; font-size: 16px;">
+        <p style="margin: 5px 0"><strong>REMITO</strong> {{ ticketImpresion()?.idRemito }}</p>
+        <p style="margin: 5px 0"><strong>{{ nombreVendedor | titlecase }}:</strong> {{ ticketImpresion()?.vendedor }}</p>
+        <p style="margin: 5px 0"><strong>Fecha de Cierre:</strong> {{ ticketImpresion()?.fecha | date: 'dd/MM/yyyy HH:mm' }}</p>
+        <p style="margin: 5px 0"><strong>Comisión Aplicada:</strong> {{ ticketImpresion()?.comision }}%</p>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 15px">
+        <thead>
+          <tr style="border: 2px solid var(--color-principal); color: var(--color-texto)">
+            <th style="text-align: center; padding: 8px 0; border: 1px solid var(--color-principal); width: 10%;">Cant.</th>
+            <th style="text-align: center; padding: 8px 0; border: 1px solid var(--color-principal); width: 45%;">Producto</th>
+            <th style="text-align: center; padding: 8px 0; border: 1px solid var(--color-principal); width: 15%;">Precio Original</th>
+            <th style="text-align: center; padding: 8px 0; border: 1px solid var(--color-principal); width: 15%;">Comisión</th>
+            <th style="text-align: center; padding: 8px 0; border: 1px solid var(--color-principal); width: 15%;">Valor a Liquidar</th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let item of ticketImpresion()?.items">
+            <tr *ngIf="item.cantidad_vendida > 0" style="border-bottom: 1px solid var(--color-principal)">
+              <td style="padding: 8px 0; text-align: center; border: 1px solid var(--color-principal)">{{ item.cantidad_vendida }}</td>
+              <td style="padding: 8px 0; text-align: center; border: 1px solid var(--color-principal)">{{ item.codigo }} - {{ item.nombre }}</td>
+              <td style="padding: 8px 0; text-align: center; border: 1px solid var(--color-principal)">$ {{ item.precio | number: '1.0-0' }}</td>
+              <td style="padding: 8px 0; text-align: center; border: 1px solid var(--color-principal)">- $ {{ (item.precio * ticketImpresion()!.comision) / 100 | number: '1.0-0' }}</td>
+              <td style="padding: 8px 0; text-align: center; font-weight: bold; border: 1px solid var(--color-principal)">$ {{ (item.precio - (item.precio * ticketImpresion()!.comision) / 100) * item.cantidad_vendida | number: '1.0-0' }}</td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+
+      <div style="text-align: right; font-size: 22px; border-top: 2px solid #000; padding-top: 15px;">
+        <strong>TOTAL A RENDIR: <span style="font-size: 26px">$ {{ ticketImpresion()?.totalNeto | number: '1.0-0' }}</span></strong>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="vistaDetalleActual() === 'pagos'" style="width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid #ccc">
+    <div id="registro-pagos" class="seccion-impresion" style="background: white; padding: 20px; min-width: 850px">
+      <h3 style="margin-top: 0; color: var(--color-texto); border-bottom: 2px dashed #ccc; padding-bottom: 10px;">Registro de Cobros - Remito {{ remitoEnDetalle().id }} - {{ remitoEnDetalle().vendedor }}</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px">
+        <thead>
+          <tr style="border: 2px solid var(--color-principal); color: var(--color-principal)">
+            <th style="padding: 10px; text-align: left; border: 1px solid var(--color-principal);">Fecha y Hora</th>
+            <th style="padding: 10px; text-align: right; border: 1px solid var(--color-principal);">Monto Abonado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let pago of pagosEnDetalle()">
+            <td style="padding: 10px; border: 1px solid var(--color-principal)">📅 {{ pago.fecha | date: 'dd/MM/yyyy - HH:mm' }} hs</td>
+            <td style="padding: 10px; border: 1px solid var(--color-principal); text-align: right; font-weight: bold;">$ {{ pago.monto | number: '1.0-0' }}</td>
+          </tr>
+          <tr *ngIf="pagosEnDetalle().length === 0">
+            <td colspan="2" style="padding: 20px; text-align: center; font-style: italic; border: 1px solid var(--color-principal);">No hay pagos registrados para este remito todavía.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top: 20px; text-align: right; font-size: 1.2em; background: #fdfaf9; padding: 15px; border-radius: 6px;">
+        Deuda Restante: <strong [style.color]="remitoEnDetalle().total_rendir - remitoEnDetalle().abonado > 0 ? '#dc3545' : '#28a745'">$ {{ remitoEnDetalle().total_rendir - remitoEnDetalle().abonado | number: '1.0-0' }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px; text-align: right">
+    <button (click)="imprimirVistaActual()" class="btn btn-principal">💾 Guardar como PDF</button>
   </div>
 </div>
