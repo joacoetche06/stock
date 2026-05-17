@@ -495,8 +495,18 @@ export class RemitosComponent {
   }
 
   // Helper para el template: categorías agrupadas para imprimir
+  // Helper para el template: categorías agrupadas para imprimir
   get categoriasParaImpresion(): string[] {
-    return [...this.configService.categorias.map((c) => c.nombre), 'Sin Categoría'];
+    // 1. Agarramos las categorías oficiales de la config (para mantener tu orden)
+    const categoriasOficiales = this.configService.categorias.map((c) => c.nombre);
+    
+    // 2. Agarramos cualquier otra categoría "vieja o rara" que tengan los productos de este remito específico
+    const categoriasReales = Object.keys(this.itemsAgrupados());
+    
+    // 3. Las unificamos sin repetir, y aseguramos que esté 'Sin Categoría' al final
+    const todas = new Set([...categoriasOficiales, ...categoriasReales, 'Sin Categoría']);
+    
+    return Array.from(todas);
   }
 
   registrarPago(remito: any) {
