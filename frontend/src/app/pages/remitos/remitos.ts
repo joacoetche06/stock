@@ -51,11 +51,15 @@ export class RemitosComponent {
 
   categoriaSeleccionada = signal<string>('');
 
-// Extrae las categorías únicas de los productos que ya tenés cargados
-categoriasDisponibles = computed(() => {
-  const catSet = new Set(this.productos().map(p => p.categoria).filter(c => !!c));
-  return Array.from(catSet).sort();
-});
+  // Extrae las categorías únicas de los productos que ya tenés cargados
+  categoriasDisponibles = computed(() => {
+    const catSet = new Set(
+      this.productos()
+        .map((p) => p.categoria)
+        .filter((c) => !!c),
+    );
+    return Array.from(catSet).sort();
+  });
 
   get nombreVendedor() {
     return this.configService.nombreVendedor;
@@ -120,32 +124,32 @@ categoriasDisponibles = computed(() => {
   }
 
   productosDisponibles = computed(() => {
-  const busqueda = this.terminoBusqueda().toLowerCase();
-  const categoria = this.categoriaSeleccionada(); // Agregamos esto
+    const busqueda = this.terminoBusqueda().toLowerCase();
+    const categoria = this.categoriaSeleccionada(); // Agregamos esto
 
-  const filtrados = this.productos().filter((p) => {
-    if (p.stock_disponible <= 0) return false;
-    
-    // NUEVO: Si hay una categoría seleccionada y no coincide, lo descartamos
-    if (categoria && p.categoria !== categoria) return false;
+    const filtrados = this.productos().filter((p) => {
+      if (p.stock_disponible <= 0) return false;
 
-    // Lógica de búsqueda original
-    if (!busqueda) return true;
-    return (
-      (p.codigo?.toLowerCase() || '').includes(busqueda) ||
-      (p.nombre?.toLowerCase() || '').includes(busqueda) ||
-      (p.categoria?.toLowerCase() || '').includes(busqueda) ||
-      (p.material?.toLowerCase() || '').includes(busqueda)
-    );
+      // NUEVO: Si hay una categoría seleccionada y no coincide, lo descartamos
+      if (categoria && p.categoria !== categoria) return false;
+
+      // Lógica de búsqueda original
+      if (!busqueda) return true;
+      return (
+        (p.codigo?.toLowerCase() || '').includes(busqueda) ||
+        (p.nombre?.toLowerCase() || '').includes(busqueda) ||
+        (p.categoria?.toLowerCase() || '').includes(busqueda) ||
+        (p.material?.toLowerCase() || '').includes(busqueda)
+      );
+    });
+
+    // ORDENAMIENTO ALFANUMÉRICO INTELIGENTE (AN01 antes que AN10)
+    return filtrados.sort((a, b) => {
+      const codA = a.codigo || '';
+      const codB = b.codigo || '';
+      return codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
+    });
   });
-
-  // ORDENAMIENTO ALFANUMÉRICO INTELIGENTE (AN01 antes que AN10)
-  return filtrados.sort((a, b) => {
-    const codA = a.codigo || '';
-    const codB = b.codigo || '';
-    return codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
-  });
-});
 
   cargarDatosBase() {
     this.vendedorService.getVendedores().subscribe((v) => this.vendedores.set(v));
@@ -418,15 +422,15 @@ categoriasDisponibles = computed(() => {
     this.remitoLiquidacion.set(remito);
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (itemsBackend) => {
-        const itemsClonados = itemsBackend.map((item: any) => {
-          const entregada = item.cantidad_entregada || item.cantidad;
-          return {
+        const itemsClonados = itemsBackend
+          .map((item: any) => ({
             ...item,
-            cantidad_entregada: entregada,
-            cantidad_vendida: entregada, // 👈 EL SECRETO: Empieza asumiendo que vendió TODO el total entregado
-            cantidad_devuelta: 0,        // 👈 Las devoluciones arrancan en 0
-          };
-        });
+            cantidad_entregada: item.cantidad_entregada || item.cantidad,
+            cantidad_vendida: 0,
+            cantidad_devuelta: item.cantidad_entregada || item.cantidad,
+          }))
+          .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
+
         this.itemsLiquidacion.set(itemsClonados);
         this.comisionPorcentaje = this.configService.comisionDefault;
         this.calcularTotalNeto();
@@ -516,13 +520,13 @@ categoriasDisponibles = computed(() => {
   get categoriasParaImpresion(): string[] {
     // 1. Agarramos las categorías oficiales de la config (para mantener tu orden)
     const categoriasOficiales = this.configService.categorias.map((c) => c.nombre);
-    
+
     // 2. Agarramos cualquier otra categoría "vieja o rara" que tengan los productos de este remito específico
     const categoriasReales = Object.keys(this.itemsAgrupados());
-    
+
     // 3. Las unificamos sin repetir, y aseguramos que esté 'Sin Categoría' al final
     const todas = new Set([...categoriasOficiales, ...categoriasReales, 'Sin Categoría']);
-    
+
     return Array.from(todas);
   }
 
