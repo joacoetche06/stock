@@ -168,12 +168,15 @@ app.get("/api/productos", async (req, res) => {
         for (const d of distribuciones) {
             if (!distMap[d.producto_id])
                 distMap[d.producto_id] = [];
-            distMap[d.producto_id].push({ vendedor: d.vendedor, cantidad: d.cantidad });
+            distMap[d.producto_id].push({
+                vendedor: d.vendedor,
+                cantidad: d.cantidad,
+            });
         }
         // Se lo metemos al producto final
-        const response = productos.map(p => ({
+        const response = productos.map((p) => ({
             ...p,
-            distribucion: distMap[p.id] || []
+            distribucion: distMap[p.id] || [],
         }));
         res.json(response);
     }
@@ -334,9 +337,7 @@ app.delete("/api/productos/:id", async (req, res) => {
         res.json({ mensaje: "Producto eliminado correctamente" });
     }
     catch (error) {
-        res
-            .status(500)
-            .json({
+        res.status(500).json({
             error: "No se puede eliminar. El producto ya está incluido en un remito.",
         });
     }
@@ -387,11 +388,110 @@ app.delete("/api/vendedores/:id", async (req, res) => {
         res.json({ mensaje: "Vendedor eliminado correctamente" });
     }
     catch (error) {
-        res
-            .status(500)
-            .json({
+        res.status(500).json({
             error: "No se puede eliminar. El vendedor ya tiene remitos asociados.",
         });
+    }
+});
+// ============================================================
+// LIQUIDACIÓN POR VENDEDORA (varios remitos, por código)
+// ============================================================
+// Trae los remitos PENDIENTES de una vendedora con lo que tiene afuera
+app.get("/api/vendedores/:id/pendientes", async (req, res) => {
+    try {
+        const filas = await db.all(`SELECT r.id as remito_id, r.fecha_salida,
+              ri.producto_id, p.codigo, p.nombre,
+              CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio,
+              (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as pendiente
+       FROM Remitos r
+       JOIN Remitos_Items ri ON ri.remito_id = r.id
+       JOIN Productos p ON p.id = ri.producto_id
+       WHERE r.vendedor_id = ? AND r.estado = 'Pendiente'
+         AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
+       ORDER BY r.fecha_salida ASC, r.id ASC, p.codigo ASC`, [req.params.id]);
+        const mapa = {};
+        for (const f of filas) {
+            if (!mapa[f.remito_id]) {
+                mapa[f.remito_id] = {
+                    remito_id: f.remito_id,
+                    fecha_salida: f.fecha_salida,
+                    items: [],
+                };
+            }
+            mapa[f.remito_id].items.push({
+                producto_id: f.producto_id,
+                codigo: f.codigo,
+                nombre: f.nombre,
+                precio: f.precio,
+                pendiente: f.pendiente,
+            });
+        }
+        res.json(Object.values(mapa));
+    }
+    catch (error) {
+        res.status(500).json({ error: "Error al obtener remitos pendientes." });
+    }
+});
+// Liquida (cierra) varios remitos de la vendedora en una sola transacción
+app.post("/api/vendedores/:id/liquidar", async (req, res) => {
+    const vendedorId = Number(req.params.id);
+    const { comision, remitos } = req.body;
+    if (!remitos || !Array.isArray(remitos) || remitos.length === 0) {
+        return res
+            .status(400)
+            .json({ error: "No se seleccionaron remitos para liquidar." });
+    }
+    try {
+        await db.run("BEGIN TRANSACTION");
+        let totalRendirGlobal = 0;
+        for (const remito of remitos) {
+            const cab = await db.get(`SELECT id, estado, vendedor_id FROM Remitos WHERE id = ?`, [remito.remito_id]);
+            if (!cab || cab.vendedor_id !== vendedorId) {
+                throw new Error(`El remito ${remito.remito_id} no pertenece a esta vendedora.`);
+            }
+            if (cab.estado !== "Pendiente") {
+                throw new Error(`El remito ${remito.remito_id} ya está cerrado.`);
+            }
+            // Lo que el front dice que se devolvió de cada producto
+            const devMap = {};
+            for (const it of remito.items || []) {
+                devMap[it.producto_id] = Number(it.cantidad_devuelta) || 0;
+            }
+            // Procesamos TODOS los items del remito (no solo los que mandó el front)
+            const itemsDb = await db.all(`SELECT ri.producto_id, ri.cantidad_entregada,
+                CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio
+         FROM Remitos_Items ri JOIN Productos p ON p.id = ri.producto_id
+         WHERE ri.remito_id = ?`, [remito.remito_id]);
+            let totalRendirRemito = 0;
+            for (const it of itemsDb) {
+                let devuelta = devMap[it.producto_id] || 0;
+                if (devuelta < 0)
+                    devuelta = 0;
+                if (devuelta > it.cantidad_entregada)
+                    devuelta = it.cantidad_entregada;
+                const vendida = it.cantidad_entregada - devuelta; // lo que no volvió = vendido
+                await db.run(`UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`, [devuelta, vendida, remito.remito_id, it.producto_id]);
+                await db.run(`UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`, [devuelta, vendida, it.producto_id]);
+                if (vendida > 0) {
+                    const descuento = it.precio * ((comision || 0) / 100);
+                    totalRendirRemito += (it.precio - descuento) * vendida;
+                }
+            }
+            await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [comision || 0, totalRendirRemito, remito.remito_id]);
+            totalRendirGlobal += totalRendirRemito;
+        }
+        await db.run("COMMIT");
+        res.json({
+            mensaje: "Liquidación realizada correctamente.",
+            total_rendir: totalRendirGlobal,
+        });
+    }
+    catch (error) {
+        await db.run("ROLLBACK");
+        console.error(error);
+        res
+            .status(500)
+            .json({ error: error.message || "Error al liquidar la vendedora." });
     }
 });
 // ============================================================
@@ -455,11 +555,7 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
     try {
         await db.run("BEGIN TRANSACTION");
         // Guardamos el total_rendir y reseteamos el abonado a 0
-        await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [
-            comision || 0,
-            total_rendir || 0,
-            remitoId,
-        ]);
+        await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [comision || 0, total_rendir || 0, remitoId]);
         for (const item of items) {
             await db.run(`UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`, [
                 item.cantidad_devuelta,
@@ -486,7 +582,10 @@ app.put("/api/remitos/:id/pagar", async (req, res) => {
     try {
         await db.run("BEGIN TRANSACTION");
         // 1. Sumamos al total abonado
-        await db.run(`UPDATE Remitos SET abonado = abonado + ? WHERE id=?`, [monto, remitoId]);
+        await db.run(`UPDATE Remitos SET abonado = abonado + ? WHERE id=?`, [
+            monto,
+            remitoId,
+        ]);
         // 2. Guardamos el registro histórico del pago con fecha y hora
         await db.run(`INSERT INTO Pagos (remito_id, monto, fecha) VALUES (?, ?, ?)`, [remitoId, monto, new Date().toISOString()]);
         await db.run("COMMIT");

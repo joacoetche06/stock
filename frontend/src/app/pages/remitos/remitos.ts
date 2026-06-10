@@ -46,6 +46,16 @@ export class RemitosComponent {
   vistaDetalleActual = signal<'entrega' | 'liquidacion' | 'pagos'>('entrega');
   pagosEnDetalle = signal<any[]>([]);
 
+  // --- Liquidación por vendedora ---
+  liquidacionVendedor = signal<{ id: number; nombre: string } | null>(null);
+  remitosPendientesVendedor = signal<any[]>([]);
+  remitosSeleccionados = signal<number[]>([]);
+  gruposLiquidacion = signal<any[]>([]);
+  totalNetoVendedor = signal<number>(0);
+  comisionVendedor: number = 25;
+  busquedaDevolucion = signal<string>('');
+  mostrarDropdownDevolucion = signal<boolean>(false);
+
   // Comisión default desde config
   comisionPorcentaje: number = 25;
 
@@ -94,6 +104,7 @@ export class RemitosComponent {
   cerrarDropdowns() {
     this.dropdownAbierto.set('');
     this.mostrarDropdown.set(false);
+    this.mostrarDropdownDevolucion.set(false); // <-- agregar
   }
 
   buscarJoya(termino: string) {
@@ -149,6 +160,17 @@ export class RemitosComponent {
       const codB = b.codigo || '';
       return codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
     });
+  });
+
+  // Códigos en calle de los remitos seleccionados, filtrados por la búsqueda
+  gruposFiltradosDevolucion = computed(() => {
+    const b = this.busquedaDevolucion().toLowerCase().trim();
+    const grupos = this.gruposLiquidacion();
+    if (!b) return grupos;
+    return grupos.filter(
+      (g) =>
+        (g.codigo || '').toLowerCase().includes(b) || (g.nombre || '').toLowerCase().includes(b),
+    );
   });
 
   cargarDatosBase() {
@@ -528,6 +550,222 @@ export class RemitosComponent {
     const todas = new Set([...categoriasOficiales, ...categoriasReales, 'Sin Categoría']);
 
     return Array.from(todas);
+  }
+
+  abrirLiquidacionVendedor() {
+    const nombre = this.filtroVendedor();
+    const vend = this.vendedores().find((v) => v.nombre === nombre);
+    if (!vend) {
+      Swal.fire('Elegí una vendedora', 'Seleccioná una en el filtro de arriba.', 'warning');
+      return;
+    }
+    this.comisionVendedor = this.configService.comisionDefault;
+    this.remitosSeleccionados.set([]);
+    this.gruposLiquidacion.set([]);
+    this.totalNetoVendedor.set(0);
+    this.liquidacionVendedor.set({ id: vend.id!, nombre: vend.nombre });
+    this.remitoService.getPendientesVendedor(vend.id!).subscribe({
+      next: (remitos) => this.remitosPendientesVendedor.set(remitos),
+      error: () => Swal.fire('Error', 'No se pudieron cargar los remitos pendientes.', 'error'),
+    });
+  }
+
+  cerrarLiquidacionVendedor() {
+    this.liquidacionVendedor.set(null);
+    this.remitosPendientesVendedor.set([]);
+    this.remitosSeleccionados.set([]);
+    this.gruposLiquidacion.set([]);
+  }
+
+  estaRemitoSeleccionado(id: number): boolean {
+    return this.remitosSeleccionados().includes(id);
+  }
+
+  toggleRemitoSeleccion(id: number) {
+    const sel = this.remitosSeleccionados();
+    this.remitosSeleccionados.set(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+    this.construirGrupos();
+  }
+
+  seleccionarTodosRemitos() {
+    this.remitosSeleccionados.set(this.remitosPendientesVendedor().map((r) => r.remito_id));
+    this.construirGrupos();
+  }
+
+  deseleccionarRemitos() {
+    this.remitosSeleccionados.set([]);
+    this.construirGrupos();
+  }
+
+  // Arma la vista agrupada por código sobre los remitos seleccionados (viejo -> nuevo)
+  construirGrupos() {
+    const sel = new Set(this.remitosSeleccionados());
+    const remitos = this.remitosPendientesVendedor()
+      .filter((r) => sel.has(r.remito_id))
+      .sort(
+        (a, b) =>
+          (a.fecha_salida || '').localeCompare(b.fecha_salida || '') || a.remito_id - b.remito_id,
+      );
+
+    const mapa: { [codigo: string]: any } = {};
+    for (const r of remitos) {
+      for (const it of r.items) {
+        if (!mapa[it.codigo]) {
+          mapa[it.codigo] = {
+            codigo: it.codigo,
+            nombre: it.nombre,
+            totalPendiente: 0,
+            totalDevuelto: 0,
+            slots: [],
+          };
+        }
+        mapa[it.codigo].totalPendiente += it.pendiente;
+        mapa[it.codigo].slots.push({
+          remito_id: r.remito_id,
+          fecha_salida: r.fecha_salida,
+          producto_id: it.producto_id,
+          precio: it.precio,
+          pendiente: it.pendiente,
+          devuelto: 0,
+        });
+      }
+    }
+
+    const grupos = Object.values(mapa).sort((a: any, b: any) =>
+      a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
+    );
+    this.gruposLiquidacion.set(grupos);
+    this.calcularTotalNetoVendedor();
+  }
+
+  // Reparte el total devuelto de un código: viejo primero (FIFO)
+  distribuirTotal(grupo: any, totalStr: any) {
+    let restante = Math.max(0, parseInt(totalStr, 10) || 0);
+    if (restante > grupo.totalPendiente) restante = grupo.totalPendiente;
+    grupo.totalDevuelto = restante;
+    for (const slot of grupo.slots) {
+      const asignar = Math.min(slot.pendiente, restante);
+      slot.devuelto = asignar;
+      restante -= asignar;
+    }
+    this.gruposLiquidacion.set([...this.gruposLiquidacion()]);
+    this.calcularTotalNetoVendedor();
+  }
+
+  buscarDevolucion(termino: string) {
+    this.busquedaDevolucion.set(termino);
+    this.mostrarDropdownDevolucion.set(true);
+  }
+
+  // Suma 1 al código elegido y reparte FIFO (viejo -> nuevo)
+  agregarDevolucionDeGrupo(grupo: any, cantidadStr: string, event: Event) {
+    event.stopPropagation();
+    const cantidad = parseInt(cantidadStr, 10) || 0;
+    if (cantidad < 1) return;
+
+    const yaDevuelto = grupo.totalDevuelto || 0;
+    const nuevoTotal = yaDevuelto + cantidad;
+
+    if (nuevoTotal > grupo.totalPendiente) {
+      Swal.fire(
+        'Supera lo que tiene en calle',
+        `De ${grupo.codigo} hay ${grupo.totalPendiente} en calle y ya cargaste ${yaDevuelto}. No podés sumar ${cantidad} más.`,
+        'warning',
+      );
+      return;
+    }
+
+    // Reusa el reparto FIFO que ya tenés
+    this.distribuirTotal(grupo, nuevoTotal);
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Devolución: ${cantidad}x ${grupo.codigo}`,
+      showConfirmButton: false,
+      timer: 1200,
+    });
+  }
+
+  // Edición manual de un remito puntual dentro del código
+  editarSlot(grupo: any, slot: any, valStr: any) {
+    let v = parseInt(valStr, 10) || 0;
+    if (v < 0) v = 0;
+    if (v > slot.pendiente) v = slot.pendiente;
+    slot.devuelto = v;
+    grupo.totalDevuelto = grupo.slots.reduce((s: number, x: any) => s + (x.devuelto || 0), 0);
+    this.gruposLiquidacion.set([...this.gruposLiquidacion()]);
+    this.calcularTotalNetoVendedor();
+  }
+
+  calcularTotalNetoVendedor() {
+    let suma = 0;
+    const com = Number(this.comisionVendedor) || 0;
+    for (const grupo of this.gruposLiquidacion()) {
+      for (const slot of grupo.slots) {
+        const vendida = slot.pendiente - (slot.devuelto || 0);
+        if (vendida > 0) {
+          const descuento = slot.precio * (com / 100);
+          suma += (slot.precio - descuento) * vendida;
+        }
+      }
+    }
+    this.totalNetoVendedor.set(suma);
+  }
+
+  async confirmarLiquidacionVendedor() {
+    const v = this.liquidacionVendedor();
+    if (!v) return;
+    if (this.remitosSeleccionados().length === 0) {
+      Swal.fire('Sin remitos', 'Seleccioná al menos un remito para liquidar.', 'warning');
+      return;
+    }
+
+    const remitosMap: { [id: number]: any } = {};
+    for (const grupo of this.gruposLiquidacion()) {
+      for (const slot of grupo.slots) {
+        if (!remitosMap[slot.remito_id]) {
+          remitosMap[slot.remito_id] = { remito_id: slot.remito_id, items: [] };
+        }
+        remitosMap[slot.remito_id].items.push({
+          producto_id: slot.producto_id,
+          cantidad_devuelta: slot.devuelto || 0,
+        });
+      }
+    }
+
+    const payload = {
+      comision: Number(this.comisionVendedor) || 0,
+      remitos: Object.values(remitosMap),
+    };
+
+    const cantidad = this.remitosSeleccionados().length;
+    const result = await Swal.fire({
+      title: '¿Confirmás la liquidación?',
+      html: `Se van a cerrar <b>${cantidad}</b> remito(s) y registrar la deuda correspondiente.<br>Los remitos que no seleccionaste quedan abiertos.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, liquidar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
+    });
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+      title: 'Liquidando...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+    this.remitoService.liquidarVendedor(v.id, payload).subscribe({
+      next: () => {
+        Swal.fire('¡Éxito!', 'Remitos liquidados y stock actualizado.', 'success');
+        this.cerrarLiquidacionVendedor();
+        this.cargarHistorialRemitos();
+        this.cargarDatosBase();
+      },
+      error: (e) => Swal.fire('Error', e?.error?.error || 'No se pudo liquidar.', 'error'),
+    });
   }
 
   registrarPago(remito: any) {

@@ -73,14 +73,22 @@ export class RemitoService {
     // Si estamos en Electron, mandamos el mensaje con el nombre dinámico
     if (this.electron) {
       return from(
-        this.electron.ipcRenderer.invoke('generar-pdf-nativo', { 
-          nombreArchivo: `${prefijo}_${idRemito}_${vendedor}` 
-        })
+        this.electron.ipcRenderer.invoke('generar-pdf-nativo', {
+          nombreArchivo: `${prefijo}_${idRemito}_${vendedor}`,
+        }),
       );
     } else {
       // Si estamos en Chrome
       window.print();
-      return from([true]); 
+      return from([true]);
     }
+  }
+
+  getPendientesVendedor(vendedorId: number): Observable<any[]> {
+    return this.http.get<any[]>(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/pendientes`);
+  }
+
+  liquidarVendedor(vendedorId: number, payload: any): Observable<any> {
+    return this.http.post(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/liquidar`, payload);
   }
 }
