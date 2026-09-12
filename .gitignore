@@ -3,3 +3,8 @@ backend/node_modules/
 frontend/node_modules/
 *.sqlite
 backend/instalador-final/
+**/.angular/
+diff.txt
+diferencias.txt
+resumen_archivos.txt
+repomix-output-*.xmls
