@@ -56,6 +56,13 @@ export class RemitosComponent {
   busquedaDevolucion = signal<string>('');
   mostrarDropdownDevolucion = signal<boolean>(false);
 
+  // --- Ingreso rápido de mercadería ---
+  mostrarIngresoRapido = signal<boolean>(false);
+  busquedaIngreso = signal<string>('');
+  productoIngreso = signal<any | null>(null);
+  cantidadIngreso: number = 1;
+  nuevoProducto: any = { categoria: '', material: '', medida: '', nombre: '', precio: 0 };
+
   // Comisión default desde config
   comisionPorcentaje: number = 25;
 
@@ -171,6 +178,23 @@ export class RemitosComponent {
       (g) =>
         (g.codigo || '').toLowerCase().includes(b) || (g.nombre || '').toLowerCase().includes(b),
     );
+  });
+
+  resultadosIngreso = computed(() => {
+    const b = this.busquedaIngreso().toLowerCase().trim();
+    if (!b) return [];
+    return this.productos()
+      .filter(
+        (p) =>
+          (p.codigo || '').toLowerCase().includes(b) || (p.nombre || '').toLowerCase().includes(b),
+      )
+      .sort((a, c) =>
+        (a.codigo || '').localeCompare(c.codigo || '', undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      )
+      .slice(0, 8);
   });
 
   cargarDatosBase() {
@@ -451,7 +475,9 @@ export class RemitosComponent {
             cantidad_vendida: 0,
             cantidad_devuelta: item.cantidad_entregada || item.cantidad,
           }))
-          .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
+          .sort((a: any, b: any) =>
+            a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
+          );
 
         this.itemsLiquidacion.set(itemsClonados);
         this.comisionPorcentaje = this.configService.comisionDefault;
@@ -829,5 +855,81 @@ export class RemitosComponent {
       error: (e) =>
         Swal.fire('Error', e?.error?.error || 'No se pudo reabrir el remito.', 'error'),
     });
+  }
+  abrirIngresoRapido() {
+    this.busquedaIngreso.set('');
+    this.productoIngreso.set(null);
+    this.cantidadIngreso = 1;
+    this.nuevoProducto = { categoria: '', material: '', medida: '', nombre: '', precio: 0 };
+    this.mostrarIngresoRapido.set(true);
+  }
+
+  cerrarIngresoRapido() {
+    this.mostrarIngresoRapido.set(false);
+  }
+
+  elegirProductoIngreso(p: any, event: Event) {
+    event.stopPropagation();
+    this.productoIngreso.set(p);
+    this.cantidadIngreso = 1;
+  }
+
+  volverABuscarIngreso() {
+    this.productoIngreso.set(null);
+  }
+
+  confirmarIngreso() {
+    const cant = Number(this.cantidadIngreso) || 0;
+    if (cant < 1) return Swal.fire('Cantidad inválida', 'Ingresá al menos 1 unidad.', 'warning');
+
+    const existente = this.productoIngreso();
+
+    if (existente) {
+      const payload = { ...existente, stock_real: existente.stock_real + cant };
+      this.productoService.editarProducto(existente.id, payload).subscribe({
+        next: () => {
+          Swal.fire(
+            'Stock actualizado',
+            `${existente.codigo}: ahora hay ${existente.stock_real + cant} unidades.`,
+            'success',
+          );
+          this.cargarDatosBase();
+          this.cerrarIngresoRapido();
+        },
+        error: (e) =>
+          Swal.fire('Error', e?.error?.error || 'No se pudo actualizar el stock.', 'error'),
+      });
+      return;
+    }
+
+    const np = this.nuevoProducto;
+    if (!np.nombre || !np.categoria) {
+      return Swal.fire('Faltan datos', 'Completá al menos categoría y nombre.', 'warning');
+    }
+
+    this.productoService
+      .crearProducto({
+        categoria: np.categoria,
+        material: np.material,
+        medida: np.medida,
+        nombre: np.nombre,
+        precio: Number(np.precio) || 0,
+        stock_real: cant,
+        stock_disponible: cant,
+      })
+      .subscribe({
+        next: (r: any) => {
+          Swal.fire(
+            'Producto creado',
+            `Se dio de alta como <b>${r?.codigo || 'nuevo código'}</b> con ${cant} unidades.`,
+            'success',
+          );
+          this.cargarDatosBase();
+          this.cerrarIngresoRapido();
+        },
+        error: (e) =>
+          Swal.fire('Error', e?.error?.error || 'No se pudo crear el producto.', 'error'),
+      });
+      return;
   }
 }

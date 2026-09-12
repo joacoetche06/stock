@@ -1,0 +1,39 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "showLineNumbers": false,
+    "topFilesLength": 10
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/dist/**",
+      "**/.angular/**",
+      "**/coverage/**",
+      "backend/public/frontend/**",
+      "**/instalador-final/**",
+      "**/*.spec.ts",
+      "**/*.test.ts",
+      "**/package-lock.json",
+      "**/*.sqlite",
+      "**/*.db",
+      "**/assets/**",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.svg",
+      "**/*.ico",
+      "**/*.woff*",
+      "**/*.pdf",
+      "**/*.xlsx",
+      "diferencias.txt",
+      "resumen_archivos.txt"
+    ]
+  },
+  "security": { "enableSecurityCheck": true }
+}

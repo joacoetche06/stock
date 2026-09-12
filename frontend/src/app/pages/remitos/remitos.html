@@ -88,6 +88,14 @@
             />
           </div>
 
+          <button
+            (click)="abrirIngresoRapido()"
+            class="btn"
+            style="background: #6c757d; color: #fff; padding: 6px 12px; margin-bottom: 8px; font-size: 0.9em"
+          >
+            ➕ ¿No encontrás algo? Cargar mercadería
+          </button>
+
           <div
             *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
             style="
@@ -1510,5 +1518,83 @@
 
   <div style="margin-top: 20px; text-align: right">
     <button (click)="imprimirVistaActual()" class="btn btn-principal">💾 Guardar como PDF</button>
+  </div>
+</div>
+
+<!-- MODAL DE INGRESO RÁPIDO DE MERCADERÍA -->
+<div
+  *ngIf="mostrarIngresoRapido()"
+  (click)="cerrarIngresoRapido()"
+  style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000"
+>
+  <div
+    (click)="$event.stopPropagation()"
+    style="background: #fff; border-radius: 8px; padding: 25px; width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto"
+  >
+    <h3 style="margin-top: 0">Cargar mercadería al stock</h3>
+
+    <ng-container *ngIf="!productoIngreso()">
+      <input
+        type="text"
+        placeholder="🔍 Buscar por código o nombre..."
+        [ngModel]="busquedaIngreso()"
+        (ngModelChange)="busquedaIngreso.set($event)"
+        class="input-form"
+        style="width: 100%; box-sizing: border-box; font-size: 1.1em"
+        autocomplete="off"
+      />
+
+      <div *ngIf="resultadosIngreso().length > 0" style="margin-top: 10px">
+        <div
+          *ngFor="let p of resultadosIngreso()"
+          (click)="elegirProductoIngreso(p, $event)"
+          style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer"
+        >
+          <b>{{ p.codigo }}</b> — {{ p.nombre }}
+          <span style="color: #777; font-size: 0.9em">(stock: {{ p.stock_real }})</span>
+        </div>
+      </div>
+
+      <div
+        *ngIf="busquedaIngreso().trim() && resultadosIngreso().length === 0"
+        style="margin-top: 15px; padding: 15px; background: #fff8e1; border-radius: 6px"
+      >
+        No hay ningún producto con ese código o nombre. Completá los datos para darlo de alta:
+      </div>
+
+      <div *ngIf="busquedaIngreso().trim() && resultadosIngreso().length === 0" style="margin-top: 15px">
+        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.categoria">
+          <option value="">Categoría...</option>
+          <option *ngFor="let c of configService.categorias" [value]="c.nombre">{{ c.nombre }}</option>
+        </select>
+        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.material">
+          <option value="">Material...</option>
+          <option *ngFor="let m of configService.materiales" [value]="m">{{ m }}</option>
+        </select>
+        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.medida">
+          <option value="">Medida...</option>
+          <option *ngFor="let m of configService.medidas" [value]="m">{{ m }}</option>
+        </select>
+        <input type="text" placeholder="Nombre / modelo" class="input-form" style="width: 100%; box-sizing: border-box; margin-bottom: 10px" [(ngModel)]="nuevoProducto.nombre" />
+        <input type="number" placeholder="Precio" class="input-form" style="width: 100%; box-sizing: border-box; margin-bottom: 10px" [(ngModel)]="nuevoProducto.precio" />
+        <label style="font-weight: bold">Cantidad a cargar:</label>
+        <input type="number" min="1" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="cantidadIngreso" />
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="productoIngreso() as p">
+      <div style="padding: 12px; background: #f4f4f4; border-radius: 6px; margin-bottom: 15px">
+        <b>{{ p.codigo }}</b> — {{ p.nombre }}<br />
+        <span style="color: #777">Stock actual: {{ p.stock_real }}</span>
+      </div>
+      <label style="font-weight: bold">Cantidad a agregar:</label>
+      <input type="number" min="1" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="cantidadIngreso" />
+      <button (click)="volverABuscarIngreso()" class="btn" style="background: none; color: #555; padding: 6px 0; margin-top: 8px">← Buscar otro</button>
+    </ng-container>
+
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px">
+      <button (click)="cerrarIngresoRapido()" class="btn" style="background: #ccc; padding: 8px 16px">Cancelar</button>
+      <button (click)="confirmarIngreso()" class="btn btn-principal" style="padding: 8px 16px">Guardar</button>
+    </div>
   </div>
 </div>
