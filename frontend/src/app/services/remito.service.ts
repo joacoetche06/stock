@@ -50,6 +50,10 @@ export class RemitoService {
     return this.http.put(`${this.apiUrl}/${id}/cerrar`, payload);
   }
 
+  reabrirRemito(id: number): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${id}/reabrir`, {});
+  }
+
   editarRemito(id: number, datos: any) {
     return this.http.put(`${this.apiUrl}/${id}`, datos);
   }

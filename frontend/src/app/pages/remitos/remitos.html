@@ -344,6 +344,7 @@
             >
               💰 Cobrar
             </button>
+            <button *ngIf="r.estado === 'Cerrado'" (click)="reabrirRemito(r)" class="btn btn-advertencia" style="padding: 6px 10px">↩️ Reabrir</button>
             <button
               *ngIf="r.estado === 'Pendiente'"
               (click)="editarRemitoHistorico(r)"

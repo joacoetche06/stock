@@ -477,7 +477,9 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
                     totalRendirRemito += (it.precio - descuento) * vendida;
                 }
             }
-            await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [comision || 0, totalRendirRemito, remito.remito_id]);
+            await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
+         abonado=(SELECT COALESCE(SUM(monto),0) FROM Pagos WHERE remito_id=Remitos.id)
+         WHERE id=?`, [comision || 0, totalRendirRemito, remito.remito_id]);
             totalRendirGlobal += totalRendirRemito;
         }
         await db.run("COMMIT");
@@ -554,8 +556,9 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
     const { items, comision, total_rendir } = req.body; // <-- AHORA RECIBE EL TOTAL
     try {
         await db.run("BEGIN TRANSACTION");
-        // Guardamos el total_rendir y reseteamos el abonado a 0
-        await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, abonado=0 WHERE id=?`, [comision || 0, total_rendir || 0, remitoId]);
+        await db.run(`UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
+       abonado=(SELECT COALESCE(SUM(monto),0) FROM Pagos WHERE remito_id=Remitos.id)
+       WHERE id=?`, [comision || 0, total_rendir || 0, remitoId]);
         for (const item of items) {
             await db.run(`UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`, [
                 item.cantidad_devuelta,
@@ -594,6 +597,37 @@ app.put("/api/remitos/:id/pagar", async (req, res) => {
     catch (error) {
         await db.run("ROLLBACK");
         res.status(500).json({ error: "Error al registrar el pago" });
+    }
+});
+// REABRIR UNA LIQUIDACIÓN YA CERRADA (revierte el movimiento de stock)
+app.put("/api/remitos/:id/reabrir", async (req, res) => {
+    const remitoId = req.params.id;
+    try {
+        const cab = await db.get(`SELECT id, estado FROM Remitos WHERE id = ?`, [
+            remitoId,
+        ]);
+        if (!cab)
+            return res.status(404).json({ error: "Remito no encontrado." });
+        if (cab.estado !== "Cerrado")
+            return res.status(400).json({ error: "El remito no está cerrado." });
+        await db.run("BEGIN TRANSACTION");
+        const items = await db.all(`SELECT producto_id, cantidad_devuelta, cantidad_vendida
+       FROM Remitos_Items WHERE remito_id = ?`, [remitoId]);
+        for (const it of items) {
+            // Exactamente al revés de lo que hizo el cierre
+            await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ?, stock_real = stock_real + ? WHERE id = ?`, [it.cantidad_devuelta, it.cantidad_vendida, it.producto_id]);
+            await db.run(`UPDATE Remitos_Items SET cantidad_devuelta = 0, cantidad_vendida = 0 WHERE remito_id = ? AND producto_id = ?`, [remitoId, it.producto_id]);
+        }
+        // Los pagos NO se borran: quedan en la tabla Pagos y se recuperan al volver a cerrar
+        await db.run(`UPDATE Remitos SET estado='Pendiente', comision=0, total_rendir=0 WHERE id=?`, [remitoId]);
+        await db.run("COMMIT");
+        res.json({ mensaje: "Remito reabierto correctamente." });
+    }
+    catch (error) {
+        await db.run("ROLLBACK");
+        res
+            .status(500)
+            .json({ error: error.message || "Error al reabrir el remito." });
     }
 });
 // OBTENER HISTORIAL DE PAGOS DE UN REMITO

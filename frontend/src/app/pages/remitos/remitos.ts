@@ -801,4 +801,33 @@ export class RemitosComponent {
       }
     });
   }
+
+  async reabrirRemito(remito: any) {
+    const cobrado = remito.abonado || 0;
+    const result = await Swal.fire({
+      title: `¿Reabrir el remito #${remito.id}?`,
+      html:
+        `Se va a deshacer la liquidación y el remito vuelve a Pendiente.<br>` +
+        `El stock se reajusta como estaba antes de cerrarlo.` +
+        (cobrado > 0
+          ? `<br><br><b>Ojo:</b> este remito ya tiene $${cobrado.toLocaleString('es-AR')} cobrados. Los pagos se conservan.`
+          : ''),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, reabrir',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+    });
+    if (!result.isConfirmed) return;
+
+    this.remitoService.reabrirRemito(remito.id).subscribe({
+      next: () => {
+        Swal.fire('Reabierto', 'Ya podés editarlo y volver a liquidarlo.', 'success');
+        this.cargarHistorialRemitos();
+        this.cargarDatosBase();
+      },
+      error: (e) =>
+        Swal.fire('Error', e?.error?.error || 'No se pudo reabrir el remito.', 'error'),
+    });
+  }
 }
