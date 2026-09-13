@@ -69,8 +69,8 @@ export class ConfigService {
   }
 
   get materiales(): string[] {
-    const mats = this.config()?.inventario.materiales ?? [];
-    return [...mats].sort((a, b) => a.localeCompare(b));
+    // El orden lo define el config.json, no alfabético
+    return [...(this.config()?.inventario.materiales ?? [])];
   }
 
   // AGREGAR ESTA FUNCIÓN NUEVA:

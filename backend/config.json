@@ -59,12 +59,12 @@
     ],
     "materiales": [
       "Acero",
-      "Acero blanco",
       "Plata",
+      "Acero blanco",
+      "Acero Dorado",
       "Cristal",
       "Plata y Oro",
-      "Otro",
-      "Acero Dorado"
+      "Otro"
     ]
   }
 }
