@@ -51,6 +51,7 @@ backend/
   config.json
   main.js
   package.json
+  test-devoluciones.js
   tsconfig.json
 frontend/
   .vscode/
@@ -109,46 +110,154 @@ repomix.config.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="repomix.config.json">
-{
-  "$schema": "https://repomix.com/schemas/latest/schema.json",
-  "output": {
-    "filePath": "repomix-output.xml",
-    "style": "xml",
-    "fileSummary": true,
-    "directoryStructure": true,
-    "removeComments": false,
-    "showLineNumbers": false,
-    "topFilesLength": 10
-  },
-  "ignore": {
-    "useGitignore": true,
-    "useDefaultPatterns": true,
-    "customPatterns": [
-      "**/dist/**",
-      "**/.angular/**",
-      "**/coverage/**",
-      "backend/public/frontend/**",
-      "**/instalador-final/**",
-      "**/*.spec.ts",
-      "**/*.test.ts",
-      "**/package-lock.json",
-      "**/*.sqlite",
-      "**/*.db",
-      "**/assets/**",
-      "**/*.png",
-      "**/*.jpg",
-      "**/*.svg",
-      "**/*.ico",
-      "**/*.woff*",
-      "**/*.pdf",
-      "**/*.xlsx",
-      "diferencias.txt",
-      "resumen_archivos.txt"
-    ]
-  },
-  "security": { "enableSecurityCheck": true }
+<file path="backend/test-devoluciones.js">
+// Test de devoluciones parciales contra el server local.
+// Uso (desde backend/, con el server corriendo y la base de PRUEBA):
+//   node test-devoluciones.js
+// ⚠️ Modifica la base. Al terminar la deja como estaba, pero corrélo solo sobre la copia de prueba.
+
+const sqlite3 = require("sqlite3");
+const { open } = require("sqlite");
+
+const API = "http://127.0.0.1:3001/api";
+const DB = "./app-adri.sqlite";
+const VENDEDORA = 6; // CARLITA
+const PRODUCTO = 566; // PU104
+const REMITO_VIEJO = 48; // el más viejo de CARLITA con PU104
+
+let db;
+let fallos = 0;
+const ok = (cond, msg) => {
+  console.log(`${cond ? "  ✅" : "  ❌"} ${msg}`);
+  if (!cond) fallos++;
+};
+const paso = (t) => console.log(`\n▶ ${t}`);
+
+async function api(method, url, body) {
+  const r = await fetch(API + url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: r.status, data: await r.json().catch(() => ({})) };
 }
+const prod = (id) => db.get(`SELECT codigo, stock_real, stock_disponible FROM Productos WHERE id=?`, [id]);
+const item = (rid, pid) =>
+  db.get(`SELECT cantidad_devuelta as dev, cantidad_vendida as ven FROM Remitos_Items WHERE remito_id=? AND producto_id=?`, [rid, pid]);
+
+// Foto de todo lo que puede tocar el test, para comparar al final
+async function foto() {
+  return JSON.stringify({
+    productos: await db.all(`SELECT id, stock_real, stock_disponible FROM Productos ORDER BY id`),
+    items: await db.all(`SELECT * FROM Remitos_Items ORDER BY remito_id, producto_id`),
+    remitos: await db.all(`SELECT id, estado, comision, total_rendir FROM Remitos ORDER BY id`),
+  });
+}
+
+async function main() {
+  db = await open({ filename: DB, driver: sqlite3.Database });
+  const activas = await db.get(`SELECT COUNT(*) n FROM Devoluciones WHERE estado='Activa'`);
+  if (activas.n > 0) {
+    console.log("Hay devoluciones activas en la base. Reseteá desde la copia ORIGINAL antes de correr el test.");
+    process.exit(1);
+  }
+  const inicial = await foto();
+  const p0 = await prod(PRODUCTO);
+  console.log(`Inicial ${p0.codigo}: real=${p0.stock_real} disponible=${p0.stock_disponible}`);
+
+  // ------------------------------------------------------------
+  paso("1. Devolución parcial de 1 unidad");
+  const d1 = await api("POST", `/vendedores/${VENDEDORA}/devoluciones`, {
+    items: [{ producto_id: PRODUCTO, cantidad: 1 }],
+    observacion: "test",
+  });
+  ok(d1.status === 201, `se registró (status ${d1.status})`);
+  ok(d1.data.asignaciones?.[0]?.remito_id === REMITO_VIEJO, `FIFO la asignó al remito #${REMITO_VIEJO}`);
+  const devId = d1.data.devolucion_id;
+  const p1 = await prod(PRODUCTO);
+  ok(p1.stock_disponible === p0.stock_disponible + 1, "disponible +1");
+  ok(p1.stock_real === p0.stock_real, "stock real sin cambios");
+  ok((await item(REMITO_VIEJO, PRODUCTO)).dev === 1, `remito #${REMITO_VIEJO}: cantidad_devuelta = 1`);
+  const trasDevolucion = await foto();
+
+  // ------------------------------------------------------------
+  paso("2. /pendientes refleja la devolución");
+  const pend = (await api("GET", `/vendedores/${VENDEDORA}/pendientes`)).data;
+  const r48 = pend.find((r) => r.remito_id === REMITO_VIEJO);
+  ok(r48 && !r48.items.some((i) => i.producto_id === PRODUCTO), `#${REMITO_VIEJO} ya no muestra ${p0.codigo}`);
+
+  // ------------------------------------------------------------
+  paso("3. Editar el remito con devolución activa → bloqueado");
+  const ed = await api("PUT", `/remitos/${REMITO_VIEJO}`, { items: [{ producto_id: PRODUCTO, cantidad: 1, precio: 0 }] });
+  ok(ed.status === 400, `rechazado (status ${ed.status})`);
+  ok(trasDevolucion === (await foto()), "no tocó nada");
+
+  // ------------------------------------------------------------
+  paso(`4. Liquidar solo #${REMITO_VIEJO} (todo lo demás vendido)`);
+  const liq = await api("POST", `/vendedores/${VENDEDORA}/liquidar`, {
+    comision: 0,
+    remitos: [{ remito_id: REMITO_VIEJO, items: [] }],
+  });
+  ok(liq.status === 200, `liquidado (status ${liq.status})`);
+  const it4 = await item(REMITO_VIEJO, PRODUCTO);
+  ok(it4.dev === 1 && it4.ven === 0, `${p0.codigo}: devuelta=1 vendida=0 (dio ${it4.dev}/${it4.ven})`);
+  const p4 = await prod(PRODUCTO);
+  ok(p4.stock_real === p0.stock_real, "la pieza devuelta NO se contó como vendida");
+  ok(p4.stock_disponible === p1.stock_disponible, "disponible no se sumó dos veces");
+
+  // ------------------------------------------------------------
+  paso("5. Anular con el remito liquidado → bloqueado");
+  const an1 = await api("PUT", `/devoluciones/${devId}/anular`);
+  ok(an1.status === 400, `rechazado (status ${an1.status}): ${an1.data.error}`);
+
+  // ------------------------------------------------------------
+  paso(`6. Reabrir #${REMITO_VIEJO}`);
+  const re = await api("PUT", `/remitos/${REMITO_VIEJO}/reabrir`);
+  ok(re.status === 200, `reabierto (status ${re.status})`);
+  ok(trasDevolucion === (await foto()), "la base quedó igual que después del paso 1 (se conservó la devolución)");
+
+  // ------------------------------------------------------------
+  paso("7. Anular ahora → funciona");
+  const an2 = await api("PUT", `/devoluciones/${devId}/anular`);
+  ok(an2.status === 200, `anulada (status ${an2.status})`);
+  ok(inicial === (await foto()), "la base quedó idéntica al inicio");
+
+  // ------------------------------------------------------------
+  paso("8. Remito devuelto entero → aparece como 'todo devuelto' y se cierra en $0 (vía /cerrar)");
+  const chico = await db.get(
+    `SELECT r.id, COUNT(*) n FROM Remitos r JOIN Remitos_Items ri ON ri.remito_id=r.id
+     WHERE r.vendedor_id=? AND r.estado='Pendiente' GROUP BY r.id ORDER BY n ASC LIMIT 1`,
+    [VENDEDORA],
+  );
+  // Solo es FIFO-seguro si devolvemos todo lo que tiene en calle de esos productos: usamos /pendientes
+  const pend8 = (await api("GET", `/vendedores/${VENDEDORA}/pendientes`)).data;
+  const delChico = pend8.find((r) => r.remito_id === chico.id).items;
+  const totales = {};
+  for (const r of pend8) for (const i of r.items)
+    if (delChico.some((x) => x.producto_id === i.producto_id))
+      totales[i.producto_id] = (totales[i.producto_id] || 0) + i.pendiente;
+  const d8 = await api("POST", `/vendedores/${VENDEDORA}/devoluciones`, {
+    items: Object.entries(totales).map(([producto_id, cantidad]) => ({ producto_id: Number(producto_id), cantidad })),
+  });
+  ok(d8.status === 201, `devolución total registrada (remito #${chico.id}, ${chico.n} productos)`);
+  const r8 = (await api("GET", `/vendedores/${VENDEDORA}/pendientes`)).data.find((r) => r.remito_id === chico.id);
+  ok(r8 && r8.items.length === 0, `#${chico.id} sigue en la lista con 0 productos`);
+  const c8 = await api("PUT", `/remitos/${chico.id}/cerrar`, { items: [], comision: 0 });
+  ok(c8.status === 200 && c8.data.total_rendir === 0, `cerrado con total $${c8.data.total_rendir}`);
+  await api("PUT", `/remitos/${chico.id}/reabrir`);
+  const an8 = await api("PUT", `/devoluciones/${d8.data.devolucion_id}/anular`);
+  ok(an8.status === 200, "reabierto y anulado");
+  ok(inicial === (await foto()), "la base quedó idéntica al inicio");
+
+  console.log(fallos === 0 ? "\n🎉 Todo OK" : `\n⚠️ ${fallos} chequeo(s) fallaron`);
+  await db.close();
+  process.exit(fallos ? 1 : 0);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
 </file>
 
 <file path="backend/.gitignore">
@@ -870,129 +979,45 @@ Los tres se setean automáticamente desde `config.json` al iniciar.
 Cada cliente nuevo debería tener su propia rama: `git checkout -b cliente-nombre`.
 </file>
 
-<file path="frontend/src/app/services/config.service.ts">
-import { Injectable, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { tap, Observable } from 'rxjs';
-
-export interface CategoriaConfig {
-  nombre: string;
-  prefijo: string;
-}
-
-export interface AppConfig {
-  negocio: {
-    nombre: string;
-    nombreCorto: string;
-    slogan: string;
-    colorPrincipal: string;
-    colorSecundario: string;
-    colorAcento: string;
-  };
-  app: {
-    puerto: number;
-    nombreBD: string;
-    comisionDefault: number;
-  };
-  inventario: {
-    nombreProducto: string;
-    nombreProductoPlural: string;
-    nombreVendedor: string;
-    nombreVendedorPlural: string;
-    usaMedida: boolean;
-    categoriaConMedida: string;
-    medidas: string[];
-    categorias: CategoriaConfig[];
-    materiales: string[];
-  };
-}
-
-@Injectable({
-  providedIn: 'root',
-})
-export class ConfigService {
-  private apiUrl = 'http://127.0.0.1:3001/api/config';
-
-  // Signal global — cualquier componente puede leer la config reactivamente
-  config = signal<AppConfig | null>(null);
-
-  constructor(private http: HttpClient) {}
-
-  cargar() {
-    return this.http.get<AppConfig>(this.apiUrl).pipe(
-      tap((cfg) => {
-        this.config.set(cfg);
-        this.aplicarColores(cfg);
-      })
-    );
-  }
-
-  // Aplica los colores del cliente como variables CSS globales
-  private aplicarColores(cfg: AppConfig) {
-    const root = document.documentElement;
-    root.style.setProperty('--color-principal', cfg.negocio.colorPrincipal);
-    root.style.setProperty('--color-secundario', cfg.negocio.colorSecundario);
-    root.style.setProperty('--color-acento', cfg.negocio.colorAcento);
-  }
-
-  get categorias(): CategoriaConfig[] {
-    const cats = this.config()?.inventario.categorias ?? [];
-    // Clonamos el array y lo ordenamos alfabéticamente
-    return [...cats].sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }
-
-  get materiales(): string[] {
-    const mats = this.config()?.inventario.materiales ?? [];
-    return [...mats].sort((a, b) => a.localeCompare(b));
-  }
-
-  // AGREGAR ESTA FUNCIÓN NUEVA:
-  actualizarConfig(nuevaConfig: AppConfig): Observable<any> {
-    return this.http.post(this.apiUrl, nuevaConfig).pipe(
-      tap(() => {
-        this.config.set(nuevaConfig);
-        this.aplicarColores(nuevaConfig);
-      })
-    );
-  }
-
-  get medidas(): string[] {
-    const meds = this.config()?.inventario.medidas ?? [];
-    // Ordenamos inteligentemente (40 cm, 45 cm, etc.)
-    return [...meds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-  }
-
-  get usaMedida(): boolean {
-    return this.config()?.inventario.usaMedida ?? false;
-  }
-
-  get categoriaConMedida(): string {
-    return this.config()?.inventario.categoriaConMedida ?? '';
-  }
-
-  get nombreProducto(): string {
-    return this.config()?.inventario.nombreProducto ?? 'producto';
-  }
-
-  get nombreProductoPlural(): string {
-    return this.config()?.inventario.nombreProductoPlural ?? 'productos';
-  }
-
-  get nombreVendedor(): string {
-    return this.config()?.inventario.nombreVendedor ?? 'vendedor';
-  }
-
-  get nombreVendedorPlural(): string {
-    return this.config()?.inventario.nombreVendedorPlural ?? 'vendedores';
-  }
-
-  get nombreNegocio(): string {
-    return this.config()?.negocio.nombre ?? 'Mi Negocio';
-  }
-
-  get comisionDefault(): number {
-    return this.config()?.app.comisionDefault ?? 25;
-  }
+<file path="repomix.config.json">
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "repomix-adri.xml",
+    "style": "xml",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "showLineNumbers": false,
+    "topFilesLength": 10
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/dist/**",
+      "**/.angular/**",
+      "**/coverage/**",
+      "backend/public/frontend/**",
+      "**/instalador-final/**",
+      "**/*.spec.ts",
+      "**/*.test.ts",
+      "**/package-lock.json",
+      "**/*.sqlite",
+      "**/*.db",
+      "**/assets/**",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.svg",
+      "**/*.ico",
+      "**/*.woff*",
+      "**/*.pdf",
+      "**/*.xlsx",
+      "diferencias.txt",
+      "resumen_archivos.txt"
+    ]
+  },
+  "security": { "enableSecurityCheck": true }
 }
 </file>
 
@@ -1336,6 +1361,132 @@ export class VendedoresComponent {
 }
 </file>
 
+<file path="frontend/src/app/services/config.service.ts">
+import { Injectable, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { tap, Observable } from 'rxjs';
+
+export interface CategoriaConfig {
+  nombre: string;
+  prefijo: string;
+}
+
+export interface AppConfig {
+  negocio: {
+    nombre: string;
+    nombreCorto: string;
+    slogan: string;
+    colorPrincipal: string;
+    colorSecundario: string;
+    colorAcento: string;
+  };
+  app: {
+    puerto: number;
+    nombreBD: string;
+    comisionDefault: number;
+  };
+  inventario: {
+    nombreProducto: string;
+    nombreProductoPlural: string;
+    nombreVendedor: string;
+    nombreVendedorPlural: string;
+    usaMedida: boolean;
+    categoriaConMedida: string;
+    medidas: string[];
+    categorias: CategoriaConfig[];
+    materiales: string[];
+  };
+}
+
+@Injectable({
+  providedIn: 'root',
+})
+export class ConfigService {
+  private apiUrl = 'http://127.0.0.1:3001/api/config';
+
+  // Signal global — cualquier componente puede leer la config reactivamente
+  config = signal<AppConfig | null>(null);
+
+  constructor(private http: HttpClient) {}
+
+  cargar() {
+    return this.http.get<AppConfig>(this.apiUrl).pipe(
+      tap((cfg) => {
+        this.config.set(cfg);
+        this.aplicarColores(cfg);
+      })
+    );
+  }
+
+  // Aplica los colores del cliente como variables CSS globales
+  private aplicarColores(cfg: AppConfig) {
+    const root = document.documentElement;
+    root.style.setProperty('--color-principal', cfg.negocio.colorPrincipal);
+    root.style.setProperty('--color-secundario', cfg.negocio.colorSecundario);
+    root.style.setProperty('--color-acento', cfg.negocio.colorAcento);
+  }
+
+  get categorias(): CategoriaConfig[] {
+    const cats = this.config()?.inventario.categorias ?? [];
+    // Clonamos el array y lo ordenamos alfabéticamente
+    return [...cats].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+
+  get materiales(): string[] {
+    // El orden lo define el config.json, no alfabético
+    return [...(this.config()?.inventario.materiales ?? [])];
+  }
+
+  // AGREGAR ESTA FUNCIÓN NUEVA:
+  actualizarConfig(nuevaConfig: AppConfig): Observable<any> {
+    return this.http.post(this.apiUrl, nuevaConfig).pipe(
+      tap(() => {
+        this.config.set(nuevaConfig);
+        this.aplicarColores(nuevaConfig);
+      })
+    );
+  }
+
+  get medidas(): string[] {
+    const meds = this.config()?.inventario.medidas ?? [];
+    // Ordenamos inteligentemente (40 cm, 45 cm, etc.)
+    return [...meds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  }
+
+  get usaMedida(): boolean {
+    return this.config()?.inventario.usaMedida ?? false;
+  }
+
+  get categoriaConMedida(): string {
+    return this.config()?.inventario.categoriaConMedida ?? '';
+  }
+
+  get nombreProducto(): string {
+    return this.config()?.inventario.nombreProducto ?? 'producto';
+  }
+
+  get nombreProductoPlural(): string {
+    return this.config()?.inventario.nombreProductoPlural ?? 'productos';
+  }
+
+  get nombreVendedor(): string {
+    return this.config()?.inventario.nombreVendedor ?? 'vendedor';
+  }
+
+  get nombreVendedorPlural(): string {
+    return this.config()?.inventario.nombreVendedorPlural ?? 'vendedores';
+  }
+
+  get nombreNegocio(): string {
+    return this.config()?.negocio.nombre ?? 'Mi Negocio';
+  }
+
+  get comisionDefault(): number {
+    return this.config()?.app.comisionDefault ?? 25;
+  }
+}
+</file>
+
 <file path="frontend/src/app/app.ts">
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -1472,79 +1623,6 @@ resumen_archivos.txt
 repomix-output-*.xmls
 </file>
 
-<file path="backend/config.json">
-{
-  "negocio": {
-    "nombre": "Chicas de Buenos Aires",
-    "nombreCorto": "CHICAS",
-    "slogan": "Joyería y Accesorios",
-    "colorPrincipal": "#b87366",
-    "colorSecundario": "#f4d1d1",
-    "colorAcento": "#b5d8cc"
-  },
-  "app": {
-    "puerto": 3001,
-    "nombreBD": "app-adri.sqlite",
-    "comisionDefault": 25
-  },
-  "inventario": {
-    "nombreProducto": "joya",
-    "nombreProductoPlural": "joyas",
-    "nombreVendedor": "vendedora",
-    "nombreVendedorPlural": "vendedoras",
-    "usaMedida": true,
-    "categoriaConMedida": "Cadenas",
-    "medidas": [
-      "40 cm",
-      "45 cm",
-      "50 cm",
-      "55 cm",
-      "60 cm",
-      "80"
-    ],
-    "categorias": [
-      {
-        "nombre": "Collares",
-        "prefijo": "CO"
-      },
-      {
-        "nombre": "Cadenas",
-        "prefijo": "CA"
-      },
-      {
-        "nombre": "Dijes",
-        "prefijo": "DI"
-      },
-      {
-        "nombre": "Pulseras",
-        "prefijo": "PU"
-      },
-      {
-        "nombre": "Tobilleras",
-        "prefijo": "TO"
-      },
-      {
-        "nombre": "Aros",
-        "prefijo": "AR"
-      },
-      {
-        "nombre": "Anillos",
-        "prefijo": "AN"
-      }
-    ],
-    "materiales": [
-      "Acero",
-      "Acero blanco",
-      "Plata",
-      "Cristal",
-      "Plata y Oro",
-      "Otro",
-      "Acero Dorado"
-    ]
-  }
-}
-</file>
-
 <file path="frontend/src/app/services/producto.service.ts">
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -1678,6 +1756,79 @@ export class ProductoService {
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
     "typescript": "~5.9.2"
+  }
+}
+</file>
+
+<file path="backend/config.json">
+{
+  "negocio": {
+    "nombre": "Chicas de Buenos Aires",
+    "nombreCorto": "CHICAS",
+    "slogan": "Joyería y Accesorios",
+    "colorPrincipal": "#b87366",
+    "colorSecundario": "#f4d1d1",
+    "colorAcento": "#b5d8cc"
+  },
+  "app": {
+    "puerto": 3001,
+    "nombreBD": "app-adri.sqlite",
+    "comisionDefault": 25
+  },
+  "inventario": {
+    "nombreProducto": "joya",
+    "nombreProductoPlural": "joyas",
+    "nombreVendedor": "vendedora",
+    "nombreVendedorPlural": "vendedoras",
+    "usaMedida": true,
+    "categoriaConMedida": "Cadenas",
+    "medidas": [
+      "40 cm",
+      "45 cm",
+      "50 cm",
+      "55 cm",
+      "60 cm",
+      "80"
+    ],
+    "categorias": [
+      {
+        "nombre": "Collares",
+        "prefijo": "CO"
+      },
+      {
+        "nombre": "Cadenas",
+        "prefijo": "CA"
+      },
+      {
+        "nombre": "Dijes",
+        "prefijo": "DI"
+      },
+      {
+        "nombre": "Pulseras",
+        "prefijo": "PU"
+      },
+      {
+        "nombre": "Tobilleras",
+        "prefijo": "TO"
+      },
+      {
+        "nombre": "Aros",
+        "prefijo": "AR"
+      },
+      {
+        "nombre": "Anillos",
+        "prefijo": "AN"
+      }
+    ],
+    "materiales": [
+      "Acero",
+      "Plata",
+      "Acero blanco",
+      "Acero Dorado",
+      "Cristal",
+      "Plata y Oro",
+      "Otro"
+    ]
   }
 }
 </file>
@@ -1848,6 +1999,26 @@ export class RemitoService {
 
   liquidarVendedor(vendedorId: number, payload: any): Observable<any> {
     return this.http.post(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/liquidar`, payload);
+  }
+
+  // --- Devoluciones parciales ---
+  registrarDevolucion(
+    vendedorId: number,
+    payload: { items: { producto_id: number; cantidad: number }[]; observacion?: string },
+  ): Observable<any> {
+    return this.http.post(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/devoluciones`, payload);
+  }
+
+  getDevolucionesVendedor(vendedorId: number): Observable<any[]> {
+    return this.http.get<any[]>(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/devoluciones`);
+  }
+
+  anularDevolucion(id: number): Observable<any> {
+    return this.http.put(`http://127.0.0.1:3001/api/devoluciones/${id}/anular`, {});
+  }
+
+  getDevolucionesRemito(remitoId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/${remitoId}/devoluciones`);
   }
 }
 </file>
@@ -3086,6 +3257,27 @@ async function inicializarDB() {
         fecha TEXT NOT NULL,
         FOREIGN KEY(remito_id) REFERENCES Remitos(id)
       );
+
+      CREATE TABLE IF NOT EXISTS Devoluciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vendedor_id INTEGER NOT NULL,
+        fecha TEXT NOT NULL,
+        observacion TEXT,
+        estado TEXT DEFAULT 'Activa',
+        fecha_anulacion TEXT,
+        FOREIGN KEY(vendedor_id) REFERENCES Vendedores(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS DevolucionItems (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        devolucion_id INTEGER NOT NULL,
+        remito_id INTEGER NOT NULL,
+        producto_id INTEGER NOT NULL,
+        cantidad INTEGER NOT NULL,
+        FOREIGN KEY(devolucion_id) REFERENCES Devoluciones(id),
+        FOREIGN KEY(remito_id) REFERENCES Remitos(id),
+        FOREIGN KEY(producto_id) REFERENCES Productos(id)
+      );
     `);
 
     // Migraciones seguras (ignoran error si la columna ya existe)
@@ -3450,7 +3642,6 @@ app.get("/api/vendedores/:id/pendientes", async (req, res) => {
        JOIN Remitos_Items ri ON ri.remito_id = r.id
        JOIN Productos p ON p.id = ri.producto_id
        WHERE r.vendedor_id = ? AND r.estado = 'Pendiente'
-         AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
        ORDER BY r.fecha_salida ASC, r.id ASC, p.codigo ASC`,
       [req.params.id],
     );
@@ -3458,25 +3649,57 @@ app.get("/api/vendedores/:id/pendientes", async (req, res) => {
     const mapa: any = {};
     for (const f of filas) {
       if (!mapa[f.remito_id]) {
-        mapa[f.remito_id] = {
-          remito_id: f.remito_id,
-          fecha_salida: f.fecha_salida,
-          items: [],
-        };
+        mapa[f.remito_id] = { remito_id: f.remito_id, fecha_salida: f.fecha_salida, items: [] };
       }
-      mapa[f.remito_id].items.push({
-        producto_id: f.producto_id,
-        codigo: f.codigo,
-        nombre: f.nombre,
-        precio: f.precio,
-        pendiente: f.pendiente,
-      });
+      if (f.pendiente > 0) {
+        mapa[f.remito_id].items.push({
+          producto_id: f.producto_id,
+          codigo: f.codigo,
+          nombre: f.nombre,
+          precio: f.precio,
+          pendiente: f.pendiente,
+        });
+      }
     }
     res.json(Object.values(mapa));
   } catch (error) {
     res.status(500).json({ error: "Error al obtener remitos pendientes." });
   }
 });
+
+// Cierra los ítems de un remito Pendiente. devMap = lo que devuelve AHORA (sobre lo pendiente).
+// cantidad_devuelta ya trae las devoluciones parciales activas; se suman, y al stock solo va lo nuevo.
+async function cerrarItemsRemito(remitoId: number, devMap: Record<number, number>, comision: number) {
+  const itemsDb = await db.all(
+    `SELECT ri.producto_id, ri.cantidad_entregada, ri.cantidad_devuelta as devuelta_previa,
+            CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio
+     FROM Remitos_Items ri JOIN Productos p ON p.id = ri.producto_id
+     WHERE ri.remito_id = ?`,
+    [remitoId],
+  );
+
+  let total = 0;
+  for (const it of itemsDb) {
+    const previa = it.devuelta_previa || 0;
+    const maxNueva = it.cantidad_entregada - previa;
+    let devNueva = Number(devMap[it.producto_id]) || 0;
+    if (devNueva < 0) devNueva = 0;
+    if (devNueva > maxNueva) devNueva = maxNueva;
+    const devTotal = previa + devNueva;
+    const vendida = it.cantidad_entregada - devTotal;
+
+    await db.run(
+      `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
+      [devTotal, vendida, remitoId, it.producto_id],
+    );
+    await db.run(
+      `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
+      [devNueva, vendida, it.producto_id],
+    );
+    if (vendida > 0) total += (it.precio - it.precio * (comision / 100)) * vendida;
+  }
+  return total;
+}
 
 // Liquida (cierra) varios remitos de la vendedora en una sola transacción
 app.post("/api/vendedores/:id/liquidar", async (req, res) => {
@@ -3513,36 +3736,7 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
         devMap[it.producto_id] = Number(it.cantidad_devuelta) || 0;
       }
 
-      // Procesamos TODOS los items del remito (no solo los que mandó el front)
-      const itemsDb = await db.all(
-        `SELECT ri.producto_id, ri.cantidad_entregada,
-                CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio
-         FROM Remitos_Items ri JOIN Productos p ON p.id = ri.producto_id
-         WHERE ri.remito_id = ?`,
-        [remito.remito_id],
-      );
-
-      let totalRendirRemito = 0;
-      for (const it of itemsDb) {
-        let devuelta = devMap[it.producto_id] || 0;
-        if (devuelta < 0) devuelta = 0;
-        if (devuelta > it.cantidad_entregada) devuelta = it.cantidad_entregada;
-        const vendida = it.cantidad_entregada - devuelta; // lo que no volvió = vendido
-
-        await db.run(
-          `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
-          [devuelta, vendida, remito.remito_id, it.producto_id],
-        );
-        await db.run(
-          `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
-          [devuelta, vendida, it.producto_id],
-        );
-
-        if (vendida > 0) {
-          const descuento = it.precio * ((comision || 0) / 100);
-          totalRendirRemito += (it.precio - descuento) * vendida;
-        }
-      }
+      const totalRendirRemito = await cerrarItemsRemito(remito.remito_id, devMap, comision || 0);
 
       await db.run(
         `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
@@ -3564,6 +3758,200 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
     res
       .status(500)
       .json({ error: error.message || "Error al liquidar la vendedora." });
+  }
+});
+
+// ============================================================
+// DEVOLUCIONES PARCIALES (sin liquidar)
+// ============================================================
+
+// Reparte cantidades por producto entre los remitos Pendientes de la vendedora,
+// viejo primero. Debe llamarse DENTRO de una transacción.
+async function repartirFIFO(
+  vendedorId: number,
+  items: { producto_id: number; cantidad: number }[],
+) {
+  // Unificamos por producto por si vino repetido
+  const pedido = new Map<number, number>();
+  for (const it of items) {
+    const cant = Math.floor(Number(it.cantidad) || 0);
+    if (cant <= 0) continue;
+    const pid = Number(it.producto_id);
+    pedido.set(pid, (pedido.get(pid) || 0) + cant);
+  }
+  if (pedido.size === 0) throw new ErrorValidacion("No hay cantidades válidas para devolver.");
+
+  const slots = await db.all(
+    `SELECT r.id as remito_id, ri.producto_id, p.codigo,
+            (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as pendiente
+     FROM Remitos r
+     JOIN Remitos_Items ri ON ri.remito_id = r.id
+     JOIN Productos p ON p.id = ri.producto_id
+     WHERE r.vendedor_id = ? AND r.estado = 'Pendiente'
+       AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
+     ORDER BY r.fecha_salida ASC, r.id ASC`,
+    [vendedorId],
+  );
+
+  const asignaciones: { remito_id: number; producto_id: number; cantidad: number }[] = [];
+  for (const [productoId, cantidad] of pedido) {
+    const propios = slots.filter((s: any) => s.producto_id === productoId);
+    const total = propios.reduce((acc: number, s: any) => acc + s.pendiente, 0);
+    if (cantidad > total) {
+      const cod = propios[0]?.codigo || `ID ${productoId}`;
+      throw new ErrorValidacion(
+        `De ${cod} la vendedora tiene ${total} en calle y se quieren devolver ${cantidad}.`,
+      );
+    }
+    let restante = cantidad;
+    for (const s of propios) {
+      if (restante <= 0) break;
+      const asignar = Math.min(s.pendiente, restante);
+      asignaciones.push({ remito_id: s.remito_id, producto_id: productoId, cantidad: asignar });
+      restante -= asignar;
+    }
+  }
+  return asignaciones;
+}
+
+class ErrorValidacion extends Error {}
+
+// Registrar devolución parcial
+app.post("/api/vendedores/:id/devoluciones", async (req, res) => {
+  const vendedorId = Number(req.params.id);
+  const { items, observacion } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "No se cargaron productos para devolver." });
+  }
+
+  try {
+    await db.run("BEGIN TRANSACTION");
+    const asignaciones = await repartirFIFO(vendedorId, items);
+
+    const result = await db.run(
+      `INSERT INTO Devoluciones (vendedor_id, fecha, observacion, estado) VALUES (?, ?, ?, 'Activa')`,
+      [vendedorId, new Date().toISOString(), observacion || ""],
+    );
+    const devolucionId = result.lastID;
+
+    for (const a of asignaciones) {
+      await db.run(
+        `INSERT INTO DevolucionItems (devolucion_id, remito_id, producto_id, cantidad) VALUES (?, ?, ?, ?)`,
+        [devolucionId, a.remito_id, a.producto_id, a.cantidad],
+      );
+      await db.run(
+        `UPDATE Remitos_Items SET cantidad_devuelta = cantidad_devuelta + ? WHERE remito_id = ? AND producto_id = ?`,
+        [a.cantidad, a.remito_id, a.producto_id],
+      );
+      await db.run(
+        `UPDATE Productos SET stock_disponible = stock_disponible + ? WHERE id = ?`,
+        [a.cantidad, a.producto_id],
+      );
+    }
+
+    await db.run("COMMIT");
+    res.status(201).json({ mensaje: "Devolución registrada.", devolucion_id: devolucionId, asignaciones });
+  } catch (error: any) {
+    await db.run("ROLLBACK");
+    const esValidacion = error instanceof ErrorValidacion;
+    if (!esValidacion) console.error(error);
+    res.status(esValidacion ? 400 : 500).json({ error: error.message || "Error al registrar la devolución." });
+  }
+});
+
+// Listar devoluciones de una vendedora (con ítems)
+app.get("/api/vendedores/:id/devoluciones", async (req, res) => {
+  try {
+    const devs = await db.all(
+      `SELECT * FROM Devoluciones WHERE vendedor_id = ? ORDER BY fecha DESC`,
+      [req.params.id],
+    );
+    const items = await db.all(
+      `SELECT di.devolucion_id, di.remito_id, di.producto_id, di.cantidad, p.codigo, p.nombre
+       FROM DevolucionItems di
+       JOIN Devoluciones d ON d.id = di.devolucion_id
+       JOIN Productos p ON p.id = di.producto_id
+       WHERE d.vendedor_id = ?
+       ORDER BY di.remito_id ASC, p.codigo ASC`,
+      [req.params.id],
+    );
+    res.json(devs.map((d: any) => ({ ...d, items: items.filter((i: any) => i.devolucion_id === d.id) })));
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener las devoluciones." });
+  }
+});
+
+// Historial de devoluciones parciales de un remito
+app.get("/api/remitos/:id/devoluciones", async (req, res) => {
+  try {
+    const filas = await db.all(
+      `SELECT d.id as devolucion_id, d.fecha, d.estado, d.observacion,
+              di.producto_id, di.cantidad, p.codigo, p.nombre
+       FROM DevolucionItems di
+       JOIN Devoluciones d ON d.id = di.devolucion_id
+       JOIN Productos p ON p.id = di.producto_id
+       WHERE di.remito_id = ?
+       ORDER BY d.fecha DESC, p.codigo ASC`,
+      [req.params.id],
+    );
+    res.json(filas);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener el historial de devoluciones." });
+  }
+});
+
+// Anular devolución (revierte stock, queda visible como Anulada)
+app.put("/api/devoluciones/:id/anular", async (req, res) => {
+  const devolucionId = req.params.id;
+  try {
+    const dev = await db.get(`SELECT id, estado FROM Devoluciones WHERE id = ?`, [devolucionId]);
+    if (!dev) return res.status(404).json({ error: "Devolución no encontrada." });
+    if (dev.estado !== "Activa") return res.status(400).json({ error: "La devolución ya está anulada." });
+
+    const items = await db.all(
+      `SELECT di.remito_id, di.producto_id, di.cantidad, r.estado as estado_remito
+       FROM DevolucionItems di JOIN Remitos r ON r.id = di.remito_id
+       WHERE di.devolucion_id = ?`,
+      [devolucionId],
+    );
+
+    const cerrados = [...new Set(items.filter((i: any) => i.estado_remito !== "Pendiente").map((i: any) => i.remito_id))];
+    if (cerrados.length > 0) {
+      return res.status(400).json({
+        error: `No se puede anular: el/los remito(s) #${cerrados.join(", #")} ya se liquidaron. Reabrilos primero.`,
+      });
+    }
+
+    // Que el stock alcance (la pieza pudo haber salido de nuevo en otro remito)
+    const porProducto = new Map<number, number>();
+    for (const i of items) porProducto.set(i.producto_id, (porProducto.get(i.producto_id) || 0) + i.cantidad);
+    for (const [pid, cant] of porProducto) {
+      const p = await db.get(`SELECT codigo, stock_disponible FROM Productos WHERE id = ?`, [pid]);
+      if (!p || p.stock_disponible < cant) {
+        return res.status(400).json({
+          error: `No se puede anular: de ${p?.codigo} hay ${p?.stock_disponible ?? 0} disponibles y habría que descontar ${cant} (ya salió en otro remito).`,
+        });
+      }
+    }
+
+    await db.run("BEGIN TRANSACTION");
+    for (const i of items) {
+      await db.run(
+        `UPDATE Remitos_Items SET cantidad_devuelta = cantidad_devuelta - ? WHERE remito_id = ? AND producto_id = ?`,
+        [i.cantidad, i.remito_id, i.producto_id],
+      );
+      await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id = ?`, [i.cantidad, i.producto_id]);
+    }
+    await db.run(`UPDATE Devoluciones SET estado = 'Anulada', fecha_anulacion = ? WHERE id = ?`, [
+      new Date().toISOString(),
+      devolucionId,
+    ]);
+    await db.run("COMMIT");
+    res.json({ mensaje: "Devolución anulada y stock revertido." });
+  } catch (error: any) {
+    await db.run("ROLLBACK").catch(() => {});
+    console.error(error);
+    res.status(500).json({ error: error.message || "Error al anular la devolución." });
   }
 });
 
@@ -3635,37 +4023,29 @@ app.get("/api/remitos/:id/items", async (req, res) => {
 });
 
 app.put("/api/remitos/:id/cerrar", async (req, res) => {
-  const remitoId = req.params.id;
-  const { items, comision, total_rendir } = req.body; // <-- AHORA RECIBE EL TOTAL
+  const remitoId = Number(req.params.id);
+  const { items, comision } = req.body;
   try {
-    await db.run("BEGIN TRANSACTION");
+    const cab = await db.get(`SELECT estado FROM Remitos WHERE id = ?`, [remitoId]);
+    if (!cab) return res.status(404).json({ error: "Remito no encontrado." });
+    if (cab.estado !== "Pendiente") return res.status(400).json({ error: "El remito ya está cerrado." });
 
+    const devMap: Record<number, number> = {};
+    for (const it of items || []) devMap[it.producto_id] = Number(it.cantidad_devuelta) || 0;
+
+    await db.run("BEGIN TRANSACTION");
+    const total = await cerrarItemsRemito(remitoId, devMap, comision || 0);
     await db.run(
       `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
        abonado=(SELECT COALESCE(SUM(monto),0) FROM Pagos WHERE remito_id=Remitos.id)
        WHERE id=?`,
-      [comision || 0, total_rendir || 0, remitoId],
+      [comision || 0, total, remitoId],
     );
-
-    for (const item of items) {
-      await db.run(
-        `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
-        [
-          item.cantidad_devuelta,
-          item.cantidad_vendida,
-          remitoId,
-          item.producto_id,
-        ],
-      );
-      await db.run(
-        `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
-        [item.cantidad_devuelta, item.cantidad_vendida, item.producto_id],
-      );
-    }
     await db.run("COMMIT");
-    res.json({ mensaje: "Remito cerrado y stock actualizado correctamente" });
+    res.json({ mensaje: "Remito cerrado y stock actualizado correctamente", total_rendir: total });
   } catch (error) {
     await db.run("ROLLBACK");
+    console.error(error);
     res.status(500).json({ error: "Error al cerrar el remito" });
   }
 });
@@ -3717,16 +4097,27 @@ app.put("/api/remitos/:id/reabrir", async (req, res) => {
        FROM Remitos_Items WHERE remito_id = ?`,
       [remitoId],
     );
+    const parciales = await db.all(
+      `SELECT di.producto_id, SUM(di.cantidad) as cant
+       FROM DevolucionItems di JOIN Devoluciones d ON d.id = di.devolucion_id
+       WHERE di.remito_id = ? AND d.estado = 'Activa'
+       GROUP BY di.producto_id`,
+      [remitoId],
+    );
+    const parcialMap: Record<number, number> = {};
+    for (const p of parciales) parcialMap[p.producto_id] = p.cant;
 
     for (const it of items) {
-      // Exactamente al revés de lo que hizo el cierre
+      // Solo se revierte lo de la liquidación; las devoluciones parciales se mantienen
+      const parcial = Math.min(parcialMap[it.producto_id] || 0, it.cantidad_devuelta);
+      const devLiquidacion = it.cantidad_devuelta - parcial;
       await db.run(
         `UPDATE Productos SET stock_disponible = stock_disponible - ?, stock_real = stock_real + ? WHERE id = ?`,
-        [it.cantidad_devuelta, it.cantidad_vendida, it.producto_id],
+        [devLiquidacion, it.cantidad_vendida, it.producto_id],
       );
       await db.run(
-        `UPDATE Remitos_Items SET cantidad_devuelta = 0, cantidad_vendida = 0 WHERE remito_id = ? AND producto_id = ?`,
-        [remitoId, it.producto_id],
+        `UPDATE Remitos_Items SET cantidad_devuelta = ?, cantidad_vendida = 0 WHERE remito_id = ? AND producto_id = ?`,
+        [parcial, remitoId, it.producto_id],
       );
     }
 
@@ -3764,6 +4155,17 @@ app.put("/api/remitos/:id", async (req, res) => {
   const { vendedor_id, items } = req.body;
   if (!items || items.length === 0)
     return res.status(400).json({ error: "El remito no puede estar vacío." });
+  
+  const conDev = await db.get(
+    `SELECT COUNT(*) as n FROM DevolucionItems di JOIN Devoluciones d ON d.id = di.devolucion_id
+     WHERE di.remito_id = ? AND d.estado = 'Activa'`,
+    [remitoId],
+  );
+  if (conDev.n > 0) {
+    return res.status(400).json({
+      error: "El remito tiene devoluciones parciales activas. Anulalas primero para poder editarlo.",
+    });
+  }
   try {
     await db.run("BEGIN TRANSACTION");
     if (vendedor_id) {
@@ -3919,6 +4321,14 @@ app.listen(PORT, "127.0.0.1", () => {
               autocomplete="off"
             />
           </div>
+
+          <button
+            (click)="abrirIngresoRapido()"
+            class="btn"
+            style="background: #6c757d; color: #fff; padding: 6px 12px; margin-bottom: 8px; font-size: 0.9em"
+          >
+            ➕ ¿No encontrás algo? Cargar mercadería
+          </button>
 
           <div
             *ngIf="mostrarDropdown() && productosDisponibles().length > 0"
@@ -4122,6 +4532,14 @@ app.listen(PORT, "127.0.0.1", () => {
         style="padding: 8px 14px; margin-left: auto"
       >
         💰 Liquidar a {{ filtroVendedor() }}
+      </button>
+      <button
+        *ngIf="filtroVendedor()"
+        (click)="abrirDevolucionVendedor()"
+        class="btn btn-secundario"
+        style="padding: 8px 14px"
+      >
+        ↩️ Devolución de {{ filtroVendedor() }}
       </button>
     </div>
 
@@ -4396,6 +4814,9 @@ app.listen(PORT, "127.0.0.1", () => {
           </td>
           <td style="padding: 12px; text-align: center; font-size: 1.2em; font-weight: bold">
             {{ item.cantidad_entregada }}
+            <div *ngIf="item.devuelta_previa > 0" style="font-size: 0.7em; font-weight: normal; color: #6c757d">
+              ya devolvió {{ item.devuelta_previa }}
+            </div>
           </td>
           <td style="padding: 12px; text-align: center">
             <input
@@ -4403,7 +4824,7 @@ app.listen(PORT, "127.0.0.1", () => {
               [(ngModel)]="item.cantidad_vendida"
               (ngModelChange)="actualizarCantidades(i, 'vendida')"
               min="0"
-              [max]="item.cantidad_entregada"
+              [max]="item.pendiente"
               class="input-form"
               style="width: 70px; text-align: center; font-size: 1.1em"
             />
@@ -4414,7 +4835,7 @@ app.listen(PORT, "127.0.0.1", () => {
               [(ngModel)]="item.cantidad_devuelta"
               (ngModelChange)="actualizarCantidades(i, 'devuelta')"
               min="0"
-              [max]="item.cantidad_entregada"
+              [max]="item.pendiente"
               class="input-form"
               style="width: 70px; text-align: center; font-size: 1.1em"
             />
@@ -4608,7 +5029,7 @@ app.listen(PORT, "127.0.0.1", () => {
           />
           <span
             ><strong>#{{ r.remito_id }}</strong> - {{ r.fecha_salida }} -
-            {{ r.items.length }} productos</span
+            {{ r.items.length > 0 ? r.items.length + ' productos' : 'todo devuelto' }}</span
           >
         </label>
         <span *ngIf="remitosPendientesVendedor().length === 0" style="color: #6c757d"
@@ -4853,6 +5274,247 @@ app.listen(PORT, "127.0.0.1", () => {
       >
         ✔ Liquidar remitos seleccionados
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DEVOLUCIÓN PARCIAL (sin liquidar) ===== -->
+<div
+  *ngIf="devolucionVendedor()"
+  style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1050;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(2px);
+  "
+>
+  <div
+    class="tarjeta"
+    style="
+      width: 90%;
+      max-width: 900px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 35px;
+      margin: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      position: relative;
+    "
+    (click)="$event.stopPropagation(); mostrarDropdownDevParcial.set(false)"
+  >
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #f1f3f5;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+      "
+    >
+      <h2 style="margin: 0; color: var(--color-principal); font-size: 1.6em">
+        Devolución parcial
+      </h2>
+      <span style="font-size: 1.2em; font-weight: bold; color: #495057">{{
+        devolucionVendedor()?.nombre
+      }}</span>
+    </div>
+
+    <p style="color: #6c757d; margin-top: 0">
+      La mercadería vuelve al stock ahora y los remitos siguen abiertos. Se descuenta del remito
+      más viejo primero.
+    </p>
+
+    <!-- Buscador: códigos que tiene en calle -->
+    <div (click)="$event.stopPropagation()" style="position: relative; margin-bottom: 16px">
+      <input
+        type="text"
+        placeholder="🔍 Buscar joya devuelta (código o nombre)..."
+        [ngModel]="busquedaDevParcial()"
+        (ngModelChange)="buscarDevParcial($event)"
+        (focus)="mostrarDropdownDevParcial.set(true)"
+        class="input-form"
+        style="width: 100%; box-sizing: border-box; font-size: 1.05em"
+        autocomplete="off"
+      />
+
+      <div
+        *ngIf="mostrarDropdownDevParcial() && codigosFiltradosDevParcial().length > 0"
+        style="
+          background: #fff;
+          border: 2px solid var(--color-principal);
+          border-radius: 6px;
+          max-height: 40vh;
+          overflow-y: auto;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          position: absolute;
+          width: 100%;
+          z-index: 100;
+        "
+      >
+        <div
+          *ngFor="let c of codigosFiltradosDevParcial()"
+          class="option-item"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f8f9fa;
+            padding: 10px 15px;
+            gap: 10px;
+          "
+        >
+          <span>
+            <strong>{{ c.codigo }}</strong> - {{ c.nombre }}
+            <span style="color: #6c757d; font-size: 0.9em">(en calle: {{ c.enCalle }})</span>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px">
+            <input
+              #cantDevP
+              type="number"
+              min="1"
+              value="1"
+              class="input-form"
+              style="width: 65px; text-align: center"
+              (click)="$event.stopPropagation()"
+              (keyup.enter)="agregarItemDevolucion(c, cantDevP.value, $event)"
+            />
+            <button
+              (click)="agregarItemDevolucion(c, cantDevP.value, $event)"
+              class="btn btn-principal"
+              style="padding: 6px 14px"
+            >
+              ➕ Devuelve
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <p
+        *ngIf="mostrarDropdownDevParcial() && codigosFiltradosDevParcial().length === 0"
+        style="color: #6c757d; padding: 8px 4px"
+      >
+        {{
+          codigosEnCalle().length === 0
+            ? 'Esta vendedora no tiene mercadería en calle.'
+            : 'No hay códigos que coincidan.'
+        }}
+      </p>
+    </div>
+
+    <!-- Lo cargado -->
+    <table
+      *ngIf="itemsDevolucion().length > 0"
+      style="width: 100%; border-collapse: collapse; margin-bottom: 16px"
+    >
+      <thead>
+        <tr style="background-color: #343a40; color: #fff; text-align: left">
+          <th style="padding: 10px">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 10px; text-align: center">En calle</th>
+          <th style="padding: 10px; text-align: center">Devuelve</th>
+          <th style="padding: 10px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let it of itemsDevolucion(); let i = index"
+          style="border-bottom: 1px solid #dee2e6"
+        >
+          <td style="padding: 10px">
+            <strong>{{ it.codigo }}</strong> - {{ it.nombre }}
+          </td>
+          <td style="padding: 10px; text-align: center; color: #6c757d">{{ it.enCalle }}</td>
+          <td style="padding: 10px; text-align: center">
+            <input
+              type="number"
+              min="1"
+              [max]="it.enCalle"
+              [ngModel]="it.cantidad"
+              (ngModelChange)="editarCantidadDevolucion(it, $event)"
+              class="input-form"
+              style="width: 70px; text-align: center"
+            />
+          </td>
+          <td style="padding: 10px; text-align: right">
+            <button
+              (click)="quitarItemDevolucion(i)"
+              class="btn btn-peligro"
+              style="padding: 4px 10px"
+            >
+              ✕
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <textarea
+      [(ngModel)]="observacionDevolucion"
+      placeholder="Observación (opcional)"
+      class="input-form"
+      rows="2"
+      style="width: 100%; box-sizing: border-box; margin-bottom: 16px"
+    ></textarea>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 25px">
+      <button (click)="cerrarDevolucionVendedor()" class="btn btn-secundario">Cerrar</button>
+      <button
+        (click)="confirmarDevolucion()"
+        class="btn btn-principal"
+        [disabled]="itemsDevolucion().length === 0"
+      >
+        ✔ Registrar devolución ({{ totalUnidadesDevolucion() }} u.)
+      </button>
+    </div>
+
+    <!-- Historial / constancia -->
+    <h3 style="color: #343a40; border-top: 2px solid #f1f3f5; padding-top: 15px">
+      Devoluciones registradas
+    </h3>
+    <p *ngIf="historialDevoluciones().length === 0" style="color: #6c757d">
+      Todavía no hay devoluciones para esta vendedora.
+    </p>
+    <div
+      *ngFor="let d of historialDevoluciones()"
+      style="border: 1px solid #dee2e6; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px"
+      [style.opacity]="d.estado === 'Anulada' ? 0.6 : 1"
+    >
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+        <span>
+          <strong>📅 {{ d.fecha | date: 'dd/MM/yyyy - HH:mm' }}</strong>
+          <span
+            *ngIf="d.estado === 'Anulada'"
+            style="color: #dc3545; font-weight: bold; margin-left: 8px"
+            >ANULADA {{ d.fecha_anulacion | date: 'dd/MM/yyyy' }}</span
+          >
+        </span>
+        <button
+          *ngIf="d.estado === 'Activa'"
+          (click)="anularDevolucion(d)"
+          class="btn btn-peligro"
+          style="padding: 4px 10px; font-size: 0.85em"
+        >
+          Anular
+        </button>
+      </div>
+      <div *ngIf="d.observacion" style="color: #6c757d; font-style: italic; margin: 4px 0">
+        {{ d.observacion }}
+      </div>
+      <div
+        *ngFor="let r of resumenItemsDevolucion(d)"
+        style="font-size: 0.95em; margin-top: 4px"
+        [style.text-decoration]="d.estado === 'Anulada' ? 'line-through' : 'none'"
+      >
+        <strong>{{ r.codigo }}</strong> - {{ r.nombre }} × {{ r.cantidad }}
+        <span style="color: #6c757d">({{ r.remitos }})</span>
+      </div>
     </div>
   </div>
 </div>
@@ -5340,8 +6002,147 @@ app.listen(PORT, "127.0.0.1", () => {
     </div>
   </div>
 
+  <!-- Devoluciones parciales de este remito (fuera de la zona de impresión) -->
+  <div
+    *ngIf="devolucionesRemito().length > 0"
+    style="margin-top: 20px; background: white; padding: 20px; border-radius: 8px; border: 1px solid #ccc"
+  >
+    <h3 style="margin-top: 0; color: var(--color-texto)">↩️ Devoluciones parciales</h3>
+
+    <table
+      *ngIf="resumenDevolucionesRemito().length > 0"
+      style="width: 100%; border-collapse: collapse; margin-bottom: 15px"
+    >
+      <thead>
+        <tr style="background: #f1f3f5; text-align: left">
+          <th style="padding: 8px">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 8px; text-align: center">Entregado</th>
+          <th style="padding: 8px; text-align: center">Devuelto antes de liquidar</th>
+          <th *ngIf="remitoEnDetalle().estado === 'Pendiente'" style="padding: 8px; text-align: center">
+            Queda en calle
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of resumenDevolucionesRemito()" style="border-bottom: 1px solid #dee2e6">
+          <td style="padding: 8px"><strong>{{ r.codigo }}</strong> - {{ r.nombre }}</td>
+          <td style="padding: 8px; text-align: center">{{ r.entregado }}</td>
+          <td style="padding: 8px; text-align: center">{{ r.devueltoParcial }}</td>
+          <td
+            *ngIf="remitoEnDetalle().estado === 'Pendiente'"
+            style="padding: 8px; text-align: center; font-weight: bold"
+          >
+            {{ r.queda }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.95em">
+      <thead>
+        <tr style="text-align: left; color: #6c757d">
+          <th style="padding: 6px">Fecha</th>
+          <th style="padding: 6px">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 6px; text-align: center">Cantidad</th>
+          <th style="padding: 6px">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let d of devolucionesRemito()"
+          style="border-top: 1px solid #f1f3f5"
+          [style.text-decoration]="d.estado === 'Anulada' ? 'line-through' : 'none'"
+          [style.color]="d.estado === 'Anulada' ? '#adb5bd' : 'inherit'"
+        >
+          <td style="padding: 6px">{{ d.fecha | date: 'dd/MM/yyyy - HH:mm' }}</td>
+          <td style="padding: 6px"><strong>{{ d.codigo }}</strong> - {{ d.nombre }}</td>
+          <td style="padding: 6px; text-align: center">{{ d.cantidad }}</td>
+          <td style="padding: 6px">{{ d.estado }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
   <div style="margin-top: 20px; text-align: right">
     <button (click)="imprimirVistaActual()" class="btn btn-principal">💾 Guardar como PDF</button>
+  </div>
+</div>
+
+<!-- MODAL DE INGRESO RÁPIDO DE MERCADERÍA -->
+<div
+  *ngIf="mostrarIngresoRapido()"
+  (click)="cerrarIngresoRapido()"
+  style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000"
+>
+  <div
+    (click)="$event.stopPropagation()"
+    style="background: #fff; border-radius: 8px; padding: 25px; width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto"
+  >
+    <h3 style="margin-top: 0">Cargar mercadería al stock</h3>
+
+    <ng-container *ngIf="!productoIngreso()">
+      <input
+        type="text"
+        placeholder="🔍 Buscar por código o nombre..."
+        [ngModel]="busquedaIngreso()"
+        (ngModelChange)="busquedaIngreso.set($event)"
+        class="input-form"
+        style="width: 100%; box-sizing: border-box; font-size: 1.1em"
+        autocomplete="off"
+      />
+
+      <div *ngIf="resultadosIngreso().length > 0" style="margin-top: 10px">
+        <div
+          *ngFor="let p of resultadosIngreso()"
+          (click)="elegirProductoIngreso(p, $event)"
+          style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer"
+        >
+          <b>{{ p.codigo }}</b> — {{ p.nombre }}
+          <span style="color: #777; font-size: 0.9em">(stock: {{ p.stock_real }})</span>
+        </div>
+      </div>
+
+      <div
+        *ngIf="busquedaIngreso().trim() && resultadosIngreso().length === 0"
+        style="margin-top: 15px; padding: 15px; background: #fff8e1; border-radius: 6px"
+      >
+        No hay ningún producto con ese código o nombre. Completá los datos para darlo de alta:
+      </div>
+
+      <div *ngIf="busquedaIngreso().trim() && resultadosIngreso().length === 0" style="margin-top: 15px">
+        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.categoria">
+          <option value="">Categoría...</option>
+          <option *ngFor="let c of configService.categorias" [value]="c.nombre">{{ c.nombre }}</option>
+        </select>
+        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.material">
+          <option value="">Material...</option>
+          <option *ngFor="let m of configService.materiales" [value]="m">{{ m }}</option>
+        </select>
+        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.medida">
+          <option value="">Medida...</option>
+          <option *ngFor="let m of configService.medidas" [value]="m">{{ m }}</option>
+        </select>
+        <input type="text" placeholder="Nombre / modelo" class="input-form" style="width: 100%; box-sizing: border-box; margin-bottom: 10px" [(ngModel)]="nuevoProducto.nombre" />
+        <input type="number" placeholder="Precio" class="input-form" style="width: 100%; box-sizing: border-box; margin-bottom: 10px" [(ngModel)]="nuevoProducto.precio" />
+        <label style="font-weight: bold">Cantidad a cargar:</label>
+        <input type="number" min="1" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="cantidadIngreso" />
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="productoIngreso() as p">
+      <div style="padding: 12px; background: #f4f4f4; border-radius: 6px; margin-bottom: 15px">
+        <b>{{ p.codigo }}</b> — {{ p.nombre }}<br />
+        <span style="color: #777">Stock actual: {{ p.stock_real }}</span>
+      </div>
+      <label style="font-weight: bold">Cantidad a agregar:</label>
+      <input type="number" min="1" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="cantidadIngreso" />
+      <button (click)="volverABuscarIngreso()" class="btn" style="background: none; color: #555; padding: 6px 0; margin-top: 8px">← Buscar otro</button>
+    </ng-container>
+
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px">
+      <button (click)="cerrarIngresoRapido()" class="btn" style="background: #ccc; padding: 8px 16px">Cancelar</button>
+      <button (click)="confirmarIngreso()" class="btn btn-principal" style="padding: 8px 16px">Guardar</button>
+    </div>
   </div>
 </div>
 </file>
@@ -5405,6 +6206,23 @@ export class RemitosComponent {
   busquedaDevolucion = signal<string>('');
   mostrarDropdownDevolucion = signal<boolean>(false);
 
+  // --- Devoluciones parciales (sin liquidar) ---
+  devolucionVendedor = signal<{ id: number; nombre: string } | null>(null);
+  codigosEnCalle = signal<any[]>([]); // [{ producto_id, codigo, nombre, enCalle }]
+  itemsDevolucion = signal<any[]>([]); // [{ producto_id, codigo, nombre, cantidad, enCalle }]
+  observacionDevolucion: string = '';
+  busquedaDevParcial = signal<string>('');
+  mostrarDropdownDevParcial = signal<boolean>(false);
+  historialDevoluciones = signal<any[]>([]);
+  devolucionesRemito = signal<any[]>([]); // historial en el detalle del remito
+
+  // --- Ingreso rápido de mercadería ---
+  mostrarIngresoRapido = signal<boolean>(false);
+  busquedaIngreso = signal<string>('');
+  productoIngreso = signal<any | null>(null);
+  cantidadIngreso: number = 1;
+  nuevoProducto: any = { categoria: '', material: '', medida: '', nombre: '', precio: 0 };
+
   // Comisión default desde config
   comisionPorcentaje: number = 25;
 
@@ -5454,6 +6272,7 @@ export class RemitosComponent {
     this.dropdownAbierto.set('');
     this.mostrarDropdown.set(false);
     this.mostrarDropdownDevolucion.set(false); // <-- agregar
+    this.mostrarDropdownDevParcial.set(false);
   }
 
   buscarJoya(termino: string) {
@@ -5520,6 +6339,51 @@ export class RemitosComponent {
       (g) =>
         (g.codigo || '').toLowerCase().includes(b) || (g.nombre || '').toLowerCase().includes(b),
     );
+  });
+
+  // Códigos que la vendedora tiene en calle (todos sus remitos pendientes), filtrados
+  codigosFiltradosDevParcial = computed(() => {
+    const b = this.busquedaDevParcial().toLowerCase().trim();
+    const codigos = this.codigosEnCalle();
+    if (!b) return codigos;
+    return codigos.filter(
+      (c) =>
+        (c.codigo || '').toLowerCase().includes(b) || (c.nombre || '').toLowerCase().includes(b),
+    );
+  });
+
+  // Resumen por producto para el detalle: entregado / devuelto parcial / queda
+  resumenDevolucionesRemito = computed(() => {
+    const activas = this.devolucionesRemito().filter((d) => d.estado === 'Activa');
+    const porProducto: { [id: number]: number } = {};
+    for (const d of activas) porProducto[d.producto_id] = (porProducto[d.producto_id] || 0) + d.cantidad;
+    return this.itemsEnDetalle()
+      .filter((i) => porProducto[i.producto_id])
+      .map((i) => ({
+        codigo: i.codigo,
+        nombre: i.nombre,
+        entregado: i.cantidad_entregada,
+        devueltoParcial: porProducto[i.producto_id],
+        queda: i.cantidad_entregada - porProducto[i.producto_id],
+      }))
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
+  });
+
+  resultadosIngreso = computed(() => {
+    const b = this.busquedaIngreso().toLowerCase().trim();
+    if (!b) return [];
+    return this.productos()
+      .filter(
+        (p) =>
+          (p.codigo || '').toLowerCase().includes(b) || (p.nombre || '').toLowerCase().includes(b),
+      )
+      .sort((a, c) =>
+        (a.codigo || '').localeCompare(c.codigo || '', undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      )
+      .slice(0, 8);
   });
 
   cargarDatosBase() {
@@ -5601,6 +6465,10 @@ export class RemitosComponent {
   abrirDetalle(remito: any) {
     this.vistaDetalleActual.set('entrega');
     this.remitoEnDetalle.set(remito);
+    this.devolucionesRemito.set([]);
+    this.remitoService.getDevolucionesRemito(remito.id).subscribe({
+      next: (devs) => this.devolucionesRemito.set(devs),
+    });
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (items) => {
         this.itemsEnDetalle.set(items);
@@ -5651,6 +6519,11 @@ export class RemitosComponent {
     this.remitoEnEdicion.set(remito);
     this.vendedorSeleccionado.set(remito.vendedor_id);
     this.remitoService.getRemitoItems(remito.id).subscribe((items) => {
+      if (remito.estado === 'Pendiente' && items.some((i: any) => i.cantidad_devuelta > 0)) {
+        this.cancelarEdicionRemito();
+        Swal.fire('No se puede editar', 'Este remito tiene devoluciones parciales. Anulalas primero.', 'warning');
+        return;
+      }
       const carritoEdit = items.map((i: any) => {
         const prodBase = this.productos().find((p) => p.id === i.producto_id);
         const stockActual = prodBase ? prodBase.stock_disponible : 0;
@@ -5679,6 +6552,7 @@ export class RemitosComponent {
     this.itemsEnDetalle.set([]);
     this.itemsAgrupados.set({});
     this.pagosEnDetalle.set([]);
+    this.devolucionesRemito.set([]);
   }
 
   // Nos dice cuántas unidades de un producto ya están cargadas en el remito actual
@@ -5794,13 +6668,22 @@ export class RemitosComponent {
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (itemsBackend) => {
         const itemsClonados = itemsBackend
-          .map((item: any) => ({
-            ...item,
-            cantidad_entregada: item.cantidad_entregada || item.cantidad,
-            cantidad_vendida: 0,
-            cantidad_devuelta: item.cantidad_entregada || item.cantidad,
-          }))
-          .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
+          .map((item: any) => {
+            const llevo = item.cantidad_entregada || item.cantidad;
+            const previa = item.cantidad_devuelta || 0; // devoluciones parciales ya registradas
+            const pendiente = llevo - previa;
+            return {
+              ...item,
+              cantidad_entregada: llevo,
+              devuelta_previa: previa,
+              pendiente,
+              cantidad_vendida: 0,
+              cantidad_devuelta: pendiente,
+            };
+          })
+          .sort((a: any, b: any) =>
+            a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
+          );
 
         this.itemsLiquidacion.set(itemsClonados);
         this.comisionPorcentaje = this.configService.comisionDefault;
@@ -5819,7 +6702,7 @@ export class RemitosComponent {
   actualizarCantidades(index: number, tipo: 'vendida' | 'devuelta') {
     const items = this.itemsLiquidacion();
     const item = items[index];
-    const total = item.cantidad_entregada;
+    const total = item.pendiente;
     if (!item.cantidad_vendida || item.cantidad_vendida < 0) item.cantidad_vendida = 0;
     if (!item.cantidad_devuelta || item.cantidad_devuelta < 0) item.cantidad_devuelta = 0;
     if (tipo === 'vendida') {
@@ -5850,10 +6733,10 @@ export class RemitosComponent {
     // --- VALIDACIÓN DE SEGURIDAD RESTAURADA ---
     for (const item of this.itemsLiquidacion()) {
       const suma = (item.cantidad_vendida || 0) + (item.cantidad_devuelta || 0);
-      if (suma !== item.cantidad_entregada) {
+      if (suma !== item.pendiente) {
         Swal.fire({
           title: 'Faltan declarar productos',
-          html: `Revisá el código <b>${item.codigo}</b>.<br>Se entregaron ${item.cantidad_entregada}, pero hay ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos.`,
+          html: `Revisá el código <b>${item.codigo}</b>.<br>Tenía ${item.pendiente} en calle, pero hay ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos.`,
           icon: 'warning',
           confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
         });
@@ -5917,6 +6800,204 @@ export class RemitosComponent {
       next: (remitos) => this.remitosPendientesVendedor.set(remitos),
       error: () => Swal.fire('Error', 'No se pudieron cargar los remitos pendientes.', 'error'),
     });
+  }
+
+  // ============================================================
+  // DEVOLUCIONES PARCIALES
+  // ============================================================
+
+  abrirDevolucionVendedor() {
+    const nombre = this.filtroVendedor();
+    const vend = this.vendedores().find((v) => v.nombre === nombre);
+    if (!vend) {
+      Swal.fire('Elegí una vendedora', 'Seleccioná una en el filtro de arriba.', 'warning');
+      return;
+    }
+    this.itemsDevolucion.set([]);
+    this.observacionDevolucion = '';
+    this.busquedaDevParcial.set('');
+    this.devolucionVendedor.set({ id: vend.id!, nombre: vend.nombre });
+    this.cargarDatosDevolucion(vend.id!);
+  }
+
+  cargarDatosDevolucion(vendedorId: number) {
+    this.remitoService.getPendientesVendedor(vendedorId).subscribe({
+      next: (remitos) => {
+        // Sumamos lo que tiene en calle de cada producto entre todos sus remitos
+        const mapa: { [id: number]: any } = {};
+        for (const r of remitos) {
+          for (const it of r.items) {
+            if (!mapa[it.producto_id]) {
+              mapa[it.producto_id] = {
+                producto_id: it.producto_id,
+                codigo: it.codigo,
+                nombre: it.nombre,
+                enCalle: 0,
+              };
+            }
+            mapa[it.producto_id].enCalle += it.pendiente;
+          }
+        }
+        const codigos = Object.values(mapa).sort((a: any, b: any) =>
+          a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
+        );
+        this.codigosEnCalle.set(codigos);
+      },
+      error: () => Swal.fire('Error', 'No se pudieron cargar los remitos pendientes.', 'error'),
+    });
+    this.remitoService.getDevolucionesVendedor(vendedorId).subscribe({
+      next: (devs) => this.historialDevoluciones.set(devs),
+    });
+  }
+
+  cerrarDevolucionVendedor() {
+    this.devolucionVendedor.set(null);
+    this.codigosEnCalle.set([]);
+    this.itemsDevolucion.set([]);
+    this.historialDevoluciones.set([]);
+    this.observacionDevolucion = '';
+    this.busquedaDevParcial.set('');
+  }
+
+  buscarDevParcial(termino: string) {
+    this.busquedaDevParcial.set(termino);
+    this.mostrarDropdownDevParcial.set(true);
+  }
+
+  agregarItemDevolucion(codigo: any, cantidadStr: string, event: Event) {
+    event.stopPropagation();
+    const cantidad = parseInt(cantidadStr, 10) || 0;
+    if (cantidad < 1) return;
+
+    const items = this.itemsDevolucion();
+    const existe = items.find((i) => i.producto_id === codigo.producto_id);
+    const yaCargado = existe ? existe.cantidad : 0;
+
+    if (yaCargado + cantidad > codigo.enCalle) {
+      Swal.fire(
+        'Supera lo que tiene en calle',
+        `De ${codigo.codigo} tiene ${codigo.enCalle} en calle y ya cargaste ${yaCargado}.`,
+        'warning',
+      );
+      return;
+    }
+
+    if (existe) {
+      existe.cantidad += cantidad;
+      this.itemsDevolucion.set([...items]);
+    } else {
+      this.itemsDevolucion.set([...items, { ...codigo, cantidad }]);
+    }
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Devolución: ${cantidad}x ${codigo.codigo}`,
+      showConfirmButton: false,
+      timer: 1200,
+    });
+  }
+
+  editarCantidadDevolucion(item: any, valStr: any) {
+    let v = parseInt(valStr, 10) || 1;
+    if (v < 1) v = 1;
+    if (v > item.enCalle) v = item.enCalle;
+    item.cantidad = v;
+    this.itemsDevolucion.set([...this.itemsDevolucion()]);
+  }
+
+  quitarItemDevolucion(index: number) {
+    const items = [...this.itemsDevolucion()];
+    items.splice(index, 1);
+    this.itemsDevolucion.set(items);
+  }
+
+  totalUnidadesDevolucion(): number {
+    return this.itemsDevolucion().reduce((s, i) => s + i.cantidad, 0);
+  }
+
+  async confirmarDevolucion() {
+    const v = this.devolucionVendedor();
+    const items = this.itemsDevolucion();
+    if (!v) return;
+    if (items.length === 0) {
+      Swal.fire('Sin productos', 'Cargá al menos un producto devuelto.', 'warning');
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: '¿Registrar la devolución?',
+      html:
+        `Vuelven al stock <b>${this.totalUnidadesDevolucion()}</b> unidad(es) de ${v.nombre}.<br>` +
+        `Los remitos siguen abiertos.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, registrar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
+    });
+    if (!result.isConfirmed) return;
+
+    const payload = {
+      items: items.map((i) => ({ producto_id: i.producto_id, cantidad: i.cantidad })),
+      observacion: this.observacionDevolucion.trim(),
+    };
+
+    this.remitoService.registrarDevolucion(v.id, payload).subscribe({
+      next: (resp) => {
+        const remitos = [...new Set((resp.asignaciones || []).map((a: any) => a.remito_id))];
+        Swal.fire(
+          'Devolución registrada',
+          `La mercadería volvió al stock. Se descontó de: #${remitos.join(', #')}.`,
+          'success',
+        );
+        this.itemsDevolucion.set([]);
+        this.observacionDevolucion = '';
+        this.cargarDatosDevolucion(v.id);
+        this.cargarDatosBase();
+        this.cargarHistorialRemitos();
+      },
+      error: (e) =>
+        Swal.fire('Error', e?.error?.error || 'No se pudo registrar la devolución.', 'error'),
+    });
+  }
+
+  async anularDevolucion(dev: any) {
+    const v = this.devolucionVendedor();
+    const result = await Swal.fire({
+      title: `¿Anular la devolución del ${new Date(dev.fecha).toLocaleDateString('es-AR')}?`,
+      html: 'La mercadería vuelve a figurar en calle y se descuenta del stock.<br>La devolución queda en el historial como anulada.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, anular',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+    });
+    if (!result.isConfirmed) return;
+
+    this.remitoService.anularDevolucion(dev.id).subscribe({
+      next: () => {
+        Swal.fire('Anulada', 'La devolución fue anulada y el stock revertido.', 'success');
+        if (v) this.cargarDatosDevolucion(v.id);
+        this.cargarDatosBase();
+      },
+      error: (e) =>
+        Swal.fire('No se pudo anular', e?.error?.error || 'Error al anular la devolución.', 'error'),
+    });
+  }
+
+  // Agrupa los ítems de una devolución por código: "PU104 x3 (#48, #58)"
+  resumenItemsDevolucion(dev: any): { codigo: string; nombre: string; cantidad: number; remitos: string }[] {
+    const mapa: { [cod: string]: any } = {};
+    for (const it of dev.items || []) {
+      if (!mapa[it.codigo]) mapa[it.codigo] = { codigo: it.codigo, nombre: it.nombre, cantidad: 0, remitos: new Set() };
+      mapa[it.codigo].cantidad += it.cantidad;
+      mapa[it.codigo].remitos.add(it.remito_id);
+    }
+    return Object.values(mapa)
+      .map((m: any) => ({ ...m, remitos: '#' + [...m.remitos].join(', #') }))
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
   }
 
   cerrarLiquidacionVendedor() {
@@ -6072,6 +7153,7 @@ export class RemitosComponent {
     }
 
     const remitosMap: { [id: number]: any } = {};
+    for (const id of this.remitosSeleccionados()) remitosMap[id] = { remito_id: id, items: [] };
     for (const grupo of this.gruposLiquidacion()) {
       for (const slot of grupo.slots) {
         if (!remitosMap[slot.remito_id]) {
@@ -6178,6 +7260,82 @@ export class RemitosComponent {
       error: (e) =>
         Swal.fire('Error', e?.error?.error || 'No se pudo reabrir el remito.', 'error'),
     });
+  }
+  abrirIngresoRapido() {
+    this.busquedaIngreso.set('');
+    this.productoIngreso.set(null);
+    this.cantidadIngreso = 1;
+    this.nuevoProducto = { categoria: '', material: '', medida: '', nombre: '', precio: 0 };
+    this.mostrarIngresoRapido.set(true);
+  }
+
+  cerrarIngresoRapido() {
+    this.mostrarIngresoRapido.set(false);
+  }
+
+  elegirProductoIngreso(p: any, event: Event) {
+    event.stopPropagation();
+    this.productoIngreso.set(p);
+    this.cantidadIngreso = 1;
+  }
+
+  volverABuscarIngreso() {
+    this.productoIngreso.set(null);
+  }
+
+  confirmarIngreso() {
+    const cant = Number(this.cantidadIngreso) || 0;
+    if (cant < 1) return Swal.fire('Cantidad inválida', 'Ingresá al menos 1 unidad.', 'warning');
+
+    const existente = this.productoIngreso();
+
+    if (existente) {
+      const payload = { ...existente, stock_real: existente.stock_real + cant };
+      this.productoService.editarProducto(existente.id, payload).subscribe({
+        next: () => {
+          Swal.fire(
+            'Stock actualizado',
+            `${existente.codigo}: ahora hay ${existente.stock_real + cant} unidades.`,
+            'success',
+          );
+          this.cargarDatosBase();
+          this.cerrarIngresoRapido();
+        },
+        error: (e) =>
+          Swal.fire('Error', e?.error?.error || 'No se pudo actualizar el stock.', 'error'),
+      });
+      return;
+    }
+
+    const np = this.nuevoProducto;
+    if (!np.nombre || !np.categoria) {
+      return Swal.fire('Faltan datos', 'Completá al menos categoría y nombre.', 'warning');
+    }
+
+    this.productoService
+      .crearProducto({
+        categoria: np.categoria,
+        material: np.material,
+        medida: np.medida,
+        nombre: np.nombre,
+        precio: Number(np.precio) || 0,
+        stock_real: cant,
+        stock_disponible: cant,
+      })
+      .subscribe({
+        next: (r: any) => {
+          Swal.fire(
+            'Producto creado',
+            `Se dio de alta como <b>${r?.codigo || 'nuevo código'}</b> con ${cant} unidades.`,
+            'success',
+          );
+          this.cargarDatosBase();
+          this.cerrarIngresoRapido();
+        },
+        error: (e) =>
+          Swal.fire('Error', e?.error?.error || 'No se pudo crear el producto.', 'error'),
+      });
+      return;
   }
 }
 </file>

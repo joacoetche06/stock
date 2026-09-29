@@ -1,7 +1,7 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
   "output": {
-    "filePath": "repomix-output.xml",
+    "filePath": "repomix-adri.xml",
     "style": "xml",
     "fileSummary": true,
     "directoryStructure": true,
