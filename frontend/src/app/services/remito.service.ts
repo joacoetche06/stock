@@ -95,4 +95,24 @@ export class RemitoService {
   liquidarVendedor(vendedorId: number, payload: any): Observable<any> {
     return this.http.post(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/liquidar`, payload);
   }
+
+  // --- Devoluciones parciales ---
+  registrarDevolucion(
+    vendedorId: number,
+    payload: { items: { producto_id: number; cantidad: number }[]; observacion?: string },
+  ): Observable<any> {
+    return this.http.post(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/devoluciones`, payload);
+  }
+
+  getDevolucionesVendedor(vendedorId: number): Observable<any[]> {
+    return this.http.get<any[]>(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/devoluciones`);
+  }
+
+  anularDevolucion(id: number): Observable<any> {
+    return this.http.put(`http://127.0.0.1:3001/api/devoluciones/${id}/anular`, {});
+  }
+
+  getDevolucionesRemito(remitoId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/${remitoId}/devoluciones`);
+  }
 }

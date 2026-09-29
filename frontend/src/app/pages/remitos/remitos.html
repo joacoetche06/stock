@@ -299,6 +299,14 @@
       >
         💰 Liquidar a {{ filtroVendedor() }}
       </button>
+      <button
+        *ngIf="filtroVendedor()"
+        (click)="abrirDevolucionVendedor()"
+        class="btn btn-secundario"
+        style="padding: 8px 14px"
+      >
+        ↩️ Devolución de {{ filtroVendedor() }}
+      </button>
     </div>
 
     <h3 style="color: var(--color-texto)">Historial de Remitos Emitidos</h3>
@@ -572,6 +580,9 @@
           </td>
           <td style="padding: 12px; text-align: center; font-size: 1.2em; font-weight: bold">
             {{ item.cantidad_entregada }}
+            <div *ngIf="item.devuelta_previa > 0" style="font-size: 0.7em; font-weight: normal; color: #6c757d">
+              ya devolvió {{ item.devuelta_previa }}
+            </div>
           </td>
           <td style="padding: 12px; text-align: center">
             <input
@@ -579,7 +590,7 @@
               [(ngModel)]="item.cantidad_vendida"
               (ngModelChange)="actualizarCantidades(i, 'vendida')"
               min="0"
-              [max]="item.cantidad_entregada"
+              [max]="item.pendiente"
               class="input-form"
               style="width: 70px; text-align: center; font-size: 1.1em"
             />
@@ -590,7 +601,7 @@
               [(ngModel)]="item.cantidad_devuelta"
               (ngModelChange)="actualizarCantidades(i, 'devuelta')"
               min="0"
-              [max]="item.cantidad_entregada"
+              [max]="item.pendiente"
               class="input-form"
               style="width: 70px; text-align: center; font-size: 1.1em"
             />
@@ -784,7 +795,7 @@
           />
           <span
             ><strong>#{{ r.remito_id }}</strong> - {{ r.fecha_salida }} -
-            {{ r.items.length }} productos</span
+            {{ r.items.length > 0 ? r.items.length + ' productos' : 'todo devuelto' }}</span
           >
         </label>
         <span *ngIf="remitosPendientesVendedor().length === 0" style="color: #6c757d"
@@ -1029,6 +1040,247 @@
       >
         ✔ Liquidar remitos seleccionados
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DEVOLUCIÓN PARCIAL (sin liquidar) ===== -->
+<div
+  *ngIf="devolucionVendedor()"
+  style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1050;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(2px);
+  "
+>
+  <div
+    class="tarjeta"
+    style="
+      width: 90%;
+      max-width: 900px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 35px;
+      margin: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      position: relative;
+    "
+    (click)="$event.stopPropagation(); mostrarDropdownDevParcial.set(false)"
+  >
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #f1f3f5;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+      "
+    >
+      <h2 style="margin: 0; color: var(--color-principal); font-size: 1.6em">
+        Devolución parcial
+      </h2>
+      <span style="font-size: 1.2em; font-weight: bold; color: #495057">{{
+        devolucionVendedor()?.nombre
+      }}</span>
+    </div>
+
+    <p style="color: #6c757d; margin-top: 0">
+      La mercadería vuelve al stock ahora y los remitos siguen abiertos. Se descuenta del remito
+      más viejo primero.
+    </p>
+
+    <!-- Buscador: códigos que tiene en calle -->
+    <div (click)="$event.stopPropagation()" style="position: relative; margin-bottom: 16px">
+      <input
+        type="text"
+        placeholder="🔍 Buscar joya devuelta (código o nombre)..."
+        [ngModel]="busquedaDevParcial()"
+        (ngModelChange)="buscarDevParcial($event)"
+        (focus)="mostrarDropdownDevParcial.set(true)"
+        class="input-form"
+        style="width: 100%; box-sizing: border-box; font-size: 1.05em"
+        autocomplete="off"
+      />
+
+      <div
+        *ngIf="mostrarDropdownDevParcial() && codigosFiltradosDevParcial().length > 0"
+        style="
+          background: #fff;
+          border: 2px solid var(--color-principal);
+          border-radius: 6px;
+          max-height: 40vh;
+          overflow-y: auto;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          position: absolute;
+          width: 100%;
+          z-index: 100;
+        "
+      >
+        <div
+          *ngFor="let c of codigosFiltradosDevParcial()"
+          class="option-item"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f8f9fa;
+            padding: 10px 15px;
+            gap: 10px;
+          "
+        >
+          <span>
+            <strong>{{ c.codigo }}</strong> - {{ c.nombre }}
+            <span style="color: #6c757d; font-size: 0.9em">(en calle: {{ c.enCalle }})</span>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px">
+            <input
+              #cantDevP
+              type="number"
+              min="1"
+              value="1"
+              class="input-form"
+              style="width: 65px; text-align: center"
+              (click)="$event.stopPropagation()"
+              (keyup.enter)="agregarItemDevolucion(c, cantDevP.value, $event)"
+            />
+            <button
+              (click)="agregarItemDevolucion(c, cantDevP.value, $event)"
+              class="btn btn-principal"
+              style="padding: 6px 14px"
+            >
+              ➕ Devuelve
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <p
+        *ngIf="mostrarDropdownDevParcial() && codigosFiltradosDevParcial().length === 0"
+        style="color: #6c757d; padding: 8px 4px"
+      >
+        {{
+          codigosEnCalle().length === 0
+            ? 'Esta vendedora no tiene mercadería en calle.'
+            : 'No hay códigos que coincidan.'
+        }}
+      </p>
+    </div>
+
+    <!-- Lo cargado -->
+    <table
+      *ngIf="itemsDevolucion().length > 0"
+      style="width: 100%; border-collapse: collapse; margin-bottom: 16px"
+    >
+      <thead>
+        <tr style="background-color: #343a40; color: #fff; text-align: left">
+          <th style="padding: 10px">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 10px; text-align: center">En calle</th>
+          <th style="padding: 10px; text-align: center">Devuelve</th>
+          <th style="padding: 10px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let it of itemsDevolucion(); let i = index"
+          style="border-bottom: 1px solid #dee2e6"
+        >
+          <td style="padding: 10px">
+            <strong>{{ it.codigo }}</strong> - {{ it.nombre }}
+          </td>
+          <td style="padding: 10px; text-align: center; color: #6c757d">{{ it.enCalle }}</td>
+          <td style="padding: 10px; text-align: center">
+            <input
+              type="number"
+              min="1"
+              [max]="it.enCalle"
+              [ngModel]="it.cantidad"
+              (ngModelChange)="editarCantidadDevolucion(it, $event)"
+              class="input-form"
+              style="width: 70px; text-align: center"
+            />
+          </td>
+          <td style="padding: 10px; text-align: right">
+            <button
+              (click)="quitarItemDevolucion(i)"
+              class="btn btn-peligro"
+              style="padding: 4px 10px"
+            >
+              ✕
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <textarea
+      [(ngModel)]="observacionDevolucion"
+      placeholder="Observación (opcional)"
+      class="input-form"
+      rows="2"
+      style="width: 100%; box-sizing: border-box; margin-bottom: 16px"
+    ></textarea>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 25px">
+      <button (click)="cerrarDevolucionVendedor()" class="btn btn-secundario">Cerrar</button>
+      <button
+        (click)="confirmarDevolucion()"
+        class="btn btn-principal"
+        [disabled]="itemsDevolucion().length === 0"
+      >
+        ✔ Registrar devolución ({{ totalUnidadesDevolucion() }} u.)
+      </button>
+    </div>
+
+    <!-- Historial / constancia -->
+    <h3 style="color: #343a40; border-top: 2px solid #f1f3f5; padding-top: 15px">
+      Devoluciones registradas
+    </h3>
+    <p *ngIf="historialDevoluciones().length === 0" style="color: #6c757d">
+      Todavía no hay devoluciones para esta vendedora.
+    </p>
+    <div
+      *ngFor="let d of historialDevoluciones()"
+      style="border: 1px solid #dee2e6; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px"
+      [style.opacity]="d.estado === 'Anulada' ? 0.6 : 1"
+    >
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+        <span>
+          <strong>📅 {{ d.fecha | date: 'dd/MM/yyyy - HH:mm' }}</strong>
+          <span
+            *ngIf="d.estado === 'Anulada'"
+            style="color: #dc3545; font-weight: bold; margin-left: 8px"
+            >ANULADA {{ d.fecha_anulacion | date: 'dd/MM/yyyy' }}</span
+          >
+        </span>
+        <button
+          *ngIf="d.estado === 'Activa'"
+          (click)="anularDevolucion(d)"
+          class="btn btn-peligro"
+          style="padding: 4px 10px; font-size: 0.85em"
+        >
+          Anular
+        </button>
+      </div>
+      <div *ngIf="d.observacion" style="color: #6c757d; font-style: italic; margin: 4px 0">
+        {{ d.observacion }}
+      </div>
+      <div
+        *ngFor="let r of resumenItemsDevolucion(d)"
+        style="font-size: 0.95em; margin-top: 4px"
+        [style.text-decoration]="d.estado === 'Anulada' ? 'line-through' : 'none'"
+      >
+        <strong>{{ r.codigo }}</strong> - {{ r.nombre }} × {{ r.cantidad }}
+        <span style="color: #6c757d">({{ r.remitos }})</span>
+      </div>
     </div>
   </div>
 </div>
@@ -1514,6 +1766,67 @@
         >
       </div>
     </div>
+  </div>
+
+  <!-- Devoluciones parciales de este remito (fuera de la zona de impresión) -->
+  <div
+    *ngIf="devolucionesRemito().length > 0"
+    style="margin-top: 20px; background: white; padding: 20px; border-radius: 8px; border: 1px solid #ccc"
+  >
+    <h3 style="margin-top: 0; color: var(--color-texto)">↩️ Devoluciones parciales</h3>
+
+    <table
+      *ngIf="resumenDevolucionesRemito().length > 0"
+      style="width: 100%; border-collapse: collapse; margin-bottom: 15px"
+    >
+      <thead>
+        <tr style="background: #f1f3f5; text-align: left">
+          <th style="padding: 8px">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 8px; text-align: center">Entregado</th>
+          <th style="padding: 8px; text-align: center">Devuelto antes de liquidar</th>
+          <th *ngIf="remitoEnDetalle().estado === 'Pendiente'" style="padding: 8px; text-align: center">
+            Queda en calle
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of resumenDevolucionesRemito()" style="border-bottom: 1px solid #dee2e6">
+          <td style="padding: 8px"><strong>{{ r.codigo }}</strong> - {{ r.nombre }}</td>
+          <td style="padding: 8px; text-align: center">{{ r.entregado }}</td>
+          <td style="padding: 8px; text-align: center">{{ r.devueltoParcial }}</td>
+          <td
+            *ngIf="remitoEnDetalle().estado === 'Pendiente'"
+            style="padding: 8px; text-align: center; font-weight: bold"
+          >
+            {{ r.queda }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.95em">
+      <thead>
+        <tr style="text-align: left; color: #6c757d">
+          <th style="padding: 6px">Fecha</th>
+          <th style="padding: 6px">{{ nombreProducto | titlecase }}</th>
+          <th style="padding: 6px; text-align: center">Cantidad</th>
+          <th style="padding: 6px">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let d of devolucionesRemito()"
+          style="border-top: 1px solid #f1f3f5"
+          [style.text-decoration]="d.estado === 'Anulada' ? 'line-through' : 'none'"
+          [style.color]="d.estado === 'Anulada' ? '#adb5bd' : 'inherit'"
+        >
+          <td style="padding: 6px">{{ d.fecha | date: 'dd/MM/yyyy - HH:mm' }}</td>
+          <td style="padding: 6px"><strong>{{ d.codigo }}</strong> - {{ d.nombre }}</td>
+          <td style="padding: 6px; text-align: center">{{ d.cantidad }}</td>
+          <td style="padding: 6px">{{ d.estado }}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <div style="margin-top: 20px; text-align: right">

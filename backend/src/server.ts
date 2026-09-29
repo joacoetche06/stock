@@ -121,6 +121,27 @@ async function inicializarDB() {
         fecha TEXT NOT NULL,
         FOREIGN KEY(remito_id) REFERENCES Remitos(id)
       );
+
+      CREATE TABLE IF NOT EXISTS Devoluciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vendedor_id INTEGER NOT NULL,
+        fecha TEXT NOT NULL,
+        observacion TEXT,
+        estado TEXT DEFAULT 'Activa',
+        fecha_anulacion TEXT,
+        FOREIGN KEY(vendedor_id) REFERENCES Vendedores(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS DevolucionItems (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        devolucion_id INTEGER NOT NULL,
+        remito_id INTEGER NOT NULL,
+        producto_id INTEGER NOT NULL,
+        cantidad INTEGER NOT NULL,
+        FOREIGN KEY(devolucion_id) REFERENCES Devoluciones(id),
+        FOREIGN KEY(remito_id) REFERENCES Remitos(id),
+        FOREIGN KEY(producto_id) REFERENCES Productos(id)
+      );
     `);
 
     // Migraciones seguras (ignoran error si la columna ya existe)
@@ -485,7 +506,6 @@ app.get("/api/vendedores/:id/pendientes", async (req, res) => {
        JOIN Remitos_Items ri ON ri.remito_id = r.id
        JOIN Productos p ON p.id = ri.producto_id
        WHERE r.vendedor_id = ? AND r.estado = 'Pendiente'
-         AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
        ORDER BY r.fecha_salida ASC, r.id ASC, p.codigo ASC`,
       [req.params.id],
     );
@@ -493,25 +513,57 @@ app.get("/api/vendedores/:id/pendientes", async (req, res) => {
     const mapa: any = {};
     for (const f of filas) {
       if (!mapa[f.remito_id]) {
-        mapa[f.remito_id] = {
-          remito_id: f.remito_id,
-          fecha_salida: f.fecha_salida,
-          items: [],
-        };
+        mapa[f.remito_id] = { remito_id: f.remito_id, fecha_salida: f.fecha_salida, items: [] };
       }
-      mapa[f.remito_id].items.push({
-        producto_id: f.producto_id,
-        codigo: f.codigo,
-        nombre: f.nombre,
-        precio: f.precio,
-        pendiente: f.pendiente,
-      });
+      if (f.pendiente > 0) {
+        mapa[f.remito_id].items.push({
+          producto_id: f.producto_id,
+          codigo: f.codigo,
+          nombre: f.nombre,
+          precio: f.precio,
+          pendiente: f.pendiente,
+        });
+      }
     }
     res.json(Object.values(mapa));
   } catch (error) {
     res.status(500).json({ error: "Error al obtener remitos pendientes." });
   }
 });
+
+// Cierra los ítems de un remito Pendiente. devMap = lo que devuelve AHORA (sobre lo pendiente).
+// cantidad_devuelta ya trae las devoluciones parciales activas; se suman, y al stock solo va lo nuevo.
+async function cerrarItemsRemito(remitoId: number, devMap: Record<number, number>, comision: number) {
+  const itemsDb = await db.all(
+    `SELECT ri.producto_id, ri.cantidad_entregada, ri.cantidad_devuelta as devuelta_previa,
+            CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio
+     FROM Remitos_Items ri JOIN Productos p ON p.id = ri.producto_id
+     WHERE ri.remito_id = ?`,
+    [remitoId],
+  );
+
+  let total = 0;
+  for (const it of itemsDb) {
+    const previa = it.devuelta_previa || 0;
+    const maxNueva = it.cantidad_entregada - previa;
+    let devNueva = Number(devMap[it.producto_id]) || 0;
+    if (devNueva < 0) devNueva = 0;
+    if (devNueva > maxNueva) devNueva = maxNueva;
+    const devTotal = previa + devNueva;
+    const vendida = it.cantidad_entregada - devTotal;
+
+    await db.run(
+      `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
+      [devTotal, vendida, remitoId, it.producto_id],
+    );
+    await db.run(
+      `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
+      [devNueva, vendida, it.producto_id],
+    );
+    if (vendida > 0) total += (it.precio - it.precio * (comision / 100)) * vendida;
+  }
+  return total;
+}
 
 // Liquida (cierra) varios remitos de la vendedora en una sola transacción
 app.post("/api/vendedores/:id/liquidar", async (req, res) => {
@@ -548,36 +600,7 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
         devMap[it.producto_id] = Number(it.cantidad_devuelta) || 0;
       }
 
-      // Procesamos TODOS los items del remito (no solo los que mandó el front)
-      const itemsDb = await db.all(
-        `SELECT ri.producto_id, ri.cantidad_entregada,
-                CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio
-         FROM Remitos_Items ri JOIN Productos p ON p.id = ri.producto_id
-         WHERE ri.remito_id = ?`,
-        [remito.remito_id],
-      );
-
-      let totalRendirRemito = 0;
-      for (const it of itemsDb) {
-        let devuelta = devMap[it.producto_id] || 0;
-        if (devuelta < 0) devuelta = 0;
-        if (devuelta > it.cantidad_entregada) devuelta = it.cantidad_entregada;
-        const vendida = it.cantidad_entregada - devuelta; // lo que no volvió = vendido
-
-        await db.run(
-          `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
-          [devuelta, vendida, remito.remito_id, it.producto_id],
-        );
-        await db.run(
-          `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
-          [devuelta, vendida, it.producto_id],
-        );
-
-        if (vendida > 0) {
-          const descuento = it.precio * ((comision || 0) / 100);
-          totalRendirRemito += (it.precio - descuento) * vendida;
-        }
-      }
+      const totalRendirRemito = await cerrarItemsRemito(remito.remito_id, devMap, comision || 0);
 
       await db.run(
         `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
@@ -599,6 +622,200 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
     res
       .status(500)
       .json({ error: error.message || "Error al liquidar la vendedora." });
+  }
+});
+
+// ============================================================
+// DEVOLUCIONES PARCIALES (sin liquidar)
+// ============================================================
+
+// Reparte cantidades por producto entre los remitos Pendientes de la vendedora,
+// viejo primero. Debe llamarse DENTRO de una transacción.
+async function repartirFIFO(
+  vendedorId: number,
+  items: { producto_id: number; cantidad: number }[],
+) {
+  // Unificamos por producto por si vino repetido
+  const pedido = new Map<number, number>();
+  for (const it of items) {
+    const cant = Math.floor(Number(it.cantidad) || 0);
+    if (cant <= 0) continue;
+    const pid = Number(it.producto_id);
+    pedido.set(pid, (pedido.get(pid) || 0) + cant);
+  }
+  if (pedido.size === 0) throw new ErrorValidacion("No hay cantidades válidas para devolver.");
+
+  const slots = await db.all(
+    `SELECT r.id as remito_id, ri.producto_id, p.codigo,
+            (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as pendiente
+     FROM Remitos r
+     JOIN Remitos_Items ri ON ri.remito_id = r.id
+     JOIN Productos p ON p.id = ri.producto_id
+     WHERE r.vendedor_id = ? AND r.estado = 'Pendiente'
+       AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
+     ORDER BY r.fecha_salida ASC, r.id ASC`,
+    [vendedorId],
+  );
+
+  const asignaciones: { remito_id: number; producto_id: number; cantidad: number }[] = [];
+  for (const [productoId, cantidad] of pedido) {
+    const propios = slots.filter((s: any) => s.producto_id === productoId);
+    const total = propios.reduce((acc: number, s: any) => acc + s.pendiente, 0);
+    if (cantidad > total) {
+      const cod = propios[0]?.codigo || `ID ${productoId}`;
+      throw new ErrorValidacion(
+        `De ${cod} la vendedora tiene ${total} en calle y se quieren devolver ${cantidad}.`,
+      );
+    }
+    let restante = cantidad;
+    for (const s of propios) {
+      if (restante <= 0) break;
+      const asignar = Math.min(s.pendiente, restante);
+      asignaciones.push({ remito_id: s.remito_id, producto_id: productoId, cantidad: asignar });
+      restante -= asignar;
+    }
+  }
+  return asignaciones;
+}
+
+class ErrorValidacion extends Error {}
+
+// Registrar devolución parcial
+app.post("/api/vendedores/:id/devoluciones", async (req, res) => {
+  const vendedorId = Number(req.params.id);
+  const { items, observacion } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "No se cargaron productos para devolver." });
+  }
+
+  try {
+    await db.run("BEGIN TRANSACTION");
+    const asignaciones = await repartirFIFO(vendedorId, items);
+
+    const result = await db.run(
+      `INSERT INTO Devoluciones (vendedor_id, fecha, observacion, estado) VALUES (?, ?, ?, 'Activa')`,
+      [vendedorId, new Date().toISOString(), observacion || ""],
+    );
+    const devolucionId = result.lastID;
+
+    for (const a of asignaciones) {
+      await db.run(
+        `INSERT INTO DevolucionItems (devolucion_id, remito_id, producto_id, cantidad) VALUES (?, ?, ?, ?)`,
+        [devolucionId, a.remito_id, a.producto_id, a.cantidad],
+      );
+      await db.run(
+        `UPDATE Remitos_Items SET cantidad_devuelta = cantidad_devuelta + ? WHERE remito_id = ? AND producto_id = ?`,
+        [a.cantidad, a.remito_id, a.producto_id],
+      );
+      await db.run(
+        `UPDATE Productos SET stock_disponible = stock_disponible + ? WHERE id = ?`,
+        [a.cantidad, a.producto_id],
+      );
+    }
+
+    await db.run("COMMIT");
+    res.status(201).json({ mensaje: "Devolución registrada.", devolucion_id: devolucionId, asignaciones });
+  } catch (error: any) {
+    await db.run("ROLLBACK");
+    const esValidacion = error instanceof ErrorValidacion;
+    if (!esValidacion) console.error(error);
+    res.status(esValidacion ? 400 : 500).json({ error: error.message || "Error al registrar la devolución." });
+  }
+});
+
+// Listar devoluciones de una vendedora (con ítems)
+app.get("/api/vendedores/:id/devoluciones", async (req, res) => {
+  try {
+    const devs = await db.all(
+      `SELECT * FROM Devoluciones WHERE vendedor_id = ? ORDER BY fecha DESC`,
+      [req.params.id],
+    );
+    const items = await db.all(
+      `SELECT di.devolucion_id, di.remito_id, di.producto_id, di.cantidad, p.codigo, p.nombre
+       FROM DevolucionItems di
+       JOIN Devoluciones d ON d.id = di.devolucion_id
+       JOIN Productos p ON p.id = di.producto_id
+       WHERE d.vendedor_id = ?
+       ORDER BY di.remito_id ASC, p.codigo ASC`,
+      [req.params.id],
+    );
+    res.json(devs.map((d: any) => ({ ...d, items: items.filter((i: any) => i.devolucion_id === d.id) })));
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener las devoluciones." });
+  }
+});
+
+// Historial de devoluciones parciales de un remito
+app.get("/api/remitos/:id/devoluciones", async (req, res) => {
+  try {
+    const filas = await db.all(
+      `SELECT d.id as devolucion_id, d.fecha, d.estado, d.observacion,
+              di.producto_id, di.cantidad, p.codigo, p.nombre
+       FROM DevolucionItems di
+       JOIN Devoluciones d ON d.id = di.devolucion_id
+       JOIN Productos p ON p.id = di.producto_id
+       WHERE di.remito_id = ?
+       ORDER BY d.fecha DESC, p.codigo ASC`,
+      [req.params.id],
+    );
+    res.json(filas);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener el historial de devoluciones." });
+  }
+});
+
+// Anular devolución (revierte stock, queda visible como Anulada)
+app.put("/api/devoluciones/:id/anular", async (req, res) => {
+  const devolucionId = req.params.id;
+  try {
+    const dev = await db.get(`SELECT id, estado FROM Devoluciones WHERE id = ?`, [devolucionId]);
+    if (!dev) return res.status(404).json({ error: "Devolución no encontrada." });
+    if (dev.estado !== "Activa") return res.status(400).json({ error: "La devolución ya está anulada." });
+
+    const items = await db.all(
+      `SELECT di.remito_id, di.producto_id, di.cantidad, r.estado as estado_remito
+       FROM DevolucionItems di JOIN Remitos r ON r.id = di.remito_id
+       WHERE di.devolucion_id = ?`,
+      [devolucionId],
+    );
+
+    const cerrados = [...new Set(items.filter((i: any) => i.estado_remito !== "Pendiente").map((i: any) => i.remito_id))];
+    if (cerrados.length > 0) {
+      return res.status(400).json({
+        error: `No se puede anular: el/los remito(s) #${cerrados.join(", #")} ya se liquidaron. Reabrilos primero.`,
+      });
+    }
+
+    // Que el stock alcance (la pieza pudo haber salido de nuevo en otro remito)
+    const porProducto = new Map<number, number>();
+    for (const i of items) porProducto.set(i.producto_id, (porProducto.get(i.producto_id) || 0) + i.cantidad);
+    for (const [pid, cant] of porProducto) {
+      const p = await db.get(`SELECT codigo, stock_disponible FROM Productos WHERE id = ?`, [pid]);
+      if (!p || p.stock_disponible < cant) {
+        return res.status(400).json({
+          error: `No se puede anular: de ${p?.codigo} hay ${p?.stock_disponible ?? 0} disponibles y habría que descontar ${cant} (ya salió en otro remito).`,
+        });
+      }
+    }
+
+    await db.run("BEGIN TRANSACTION");
+    for (const i of items) {
+      await db.run(
+        `UPDATE Remitos_Items SET cantidad_devuelta = cantidad_devuelta - ? WHERE remito_id = ? AND producto_id = ?`,
+        [i.cantidad, i.remito_id, i.producto_id],
+      );
+      await db.run(`UPDATE Productos SET stock_disponible = stock_disponible - ? WHERE id = ?`, [i.cantidad, i.producto_id]);
+    }
+    await db.run(`UPDATE Devoluciones SET estado = 'Anulada', fecha_anulacion = ? WHERE id = ?`, [
+      new Date().toISOString(),
+      devolucionId,
+    ]);
+    await db.run("COMMIT");
+    res.json({ mensaje: "Devolución anulada y stock revertido." });
+  } catch (error: any) {
+    await db.run("ROLLBACK").catch(() => {});
+    console.error(error);
+    res.status(500).json({ error: error.message || "Error al anular la devolución." });
   }
 });
 
@@ -670,37 +887,29 @@ app.get("/api/remitos/:id/items", async (req, res) => {
 });
 
 app.put("/api/remitos/:id/cerrar", async (req, res) => {
-  const remitoId = req.params.id;
-  const { items, comision, total_rendir } = req.body; // <-- AHORA RECIBE EL TOTAL
+  const remitoId = Number(req.params.id);
+  const { items, comision } = req.body;
   try {
-    await db.run("BEGIN TRANSACTION");
+    const cab = await db.get(`SELECT estado FROM Remitos WHERE id = ?`, [remitoId]);
+    if (!cab) return res.status(404).json({ error: "Remito no encontrado." });
+    if (cab.estado !== "Pendiente") return res.status(400).json({ error: "El remito ya está cerrado." });
 
+    const devMap: Record<number, number> = {};
+    for (const it of items || []) devMap[it.producto_id] = Number(it.cantidad_devuelta) || 0;
+
+    await db.run("BEGIN TRANSACTION");
+    const total = await cerrarItemsRemito(remitoId, devMap, comision || 0);
     await db.run(
       `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
        abonado=(SELECT COALESCE(SUM(monto),0) FROM Pagos WHERE remito_id=Remitos.id)
        WHERE id=?`,
-      [comision || 0, total_rendir || 0, remitoId],
+      [comision || 0, total, remitoId],
     );
-
-    for (const item of items) {
-      await db.run(
-        `UPDATE Remitos_Items SET cantidad_devuelta=?, cantidad_vendida=? WHERE remito_id=? AND producto_id=?`,
-        [
-          item.cantidad_devuelta,
-          item.cantidad_vendida,
-          remitoId,
-          item.producto_id,
-        ],
-      );
-      await db.run(
-        `UPDATE Productos SET stock_disponible = stock_disponible + ?, stock_real = stock_real - ? WHERE id = ?`,
-        [item.cantidad_devuelta, item.cantidad_vendida, item.producto_id],
-      );
-    }
     await db.run("COMMIT");
-    res.json({ mensaje: "Remito cerrado y stock actualizado correctamente" });
+    res.json({ mensaje: "Remito cerrado y stock actualizado correctamente", total_rendir: total });
   } catch (error) {
     await db.run("ROLLBACK");
+    console.error(error);
     res.status(500).json({ error: "Error al cerrar el remito" });
   }
 });
@@ -752,16 +961,27 @@ app.put("/api/remitos/:id/reabrir", async (req, res) => {
        FROM Remitos_Items WHERE remito_id = ?`,
       [remitoId],
     );
+    const parciales = await db.all(
+      `SELECT di.producto_id, SUM(di.cantidad) as cant
+       FROM DevolucionItems di JOIN Devoluciones d ON d.id = di.devolucion_id
+       WHERE di.remito_id = ? AND d.estado = 'Activa'
+       GROUP BY di.producto_id`,
+      [remitoId],
+    );
+    const parcialMap: Record<number, number> = {};
+    for (const p of parciales) parcialMap[p.producto_id] = p.cant;
 
     for (const it of items) {
-      // Exactamente al revés de lo que hizo el cierre
+      // Solo se revierte lo de la liquidación; las devoluciones parciales se mantienen
+      const parcial = Math.min(parcialMap[it.producto_id] || 0, it.cantidad_devuelta);
+      const devLiquidacion = it.cantidad_devuelta - parcial;
       await db.run(
         `UPDATE Productos SET stock_disponible = stock_disponible - ?, stock_real = stock_real + ? WHERE id = ?`,
-        [it.cantidad_devuelta, it.cantidad_vendida, it.producto_id],
+        [devLiquidacion, it.cantidad_vendida, it.producto_id],
       );
       await db.run(
-        `UPDATE Remitos_Items SET cantidad_devuelta = 0, cantidad_vendida = 0 WHERE remito_id = ? AND producto_id = ?`,
-        [remitoId, it.producto_id],
+        `UPDATE Remitos_Items SET cantidad_devuelta = ?, cantidad_vendida = 0 WHERE remito_id = ? AND producto_id = ?`,
+        [parcial, remitoId, it.producto_id],
       );
     }
 
@@ -799,6 +1019,17 @@ app.put("/api/remitos/:id", async (req, res) => {
   const { vendedor_id, items } = req.body;
   if (!items || items.length === 0)
     return res.status(400).json({ error: "El remito no puede estar vacío." });
+  
+  const conDev = await db.get(
+    `SELECT COUNT(*) as n FROM DevolucionItems di JOIN Devoluciones d ON d.id = di.devolucion_id
+     WHERE di.remito_id = ? AND d.estado = 'Activa'`,
+    [remitoId],
+  );
+  if (conDev.n > 0) {
+    return res.status(400).json({
+      error: "El remito tiene devoluciones parciales activas. Anulalas primero para poder editarlo.",
+    });
+  }
   try {
     await db.run("BEGIN TRANSACTION");
     if (vendedor_id) {

@@ -56,6 +56,16 @@ export class RemitosComponent {
   busquedaDevolucion = signal<string>('');
   mostrarDropdownDevolucion = signal<boolean>(false);
 
+  // --- Devoluciones parciales (sin liquidar) ---
+  devolucionVendedor = signal<{ id: number; nombre: string } | null>(null);
+  codigosEnCalle = signal<any[]>([]); // [{ producto_id, codigo, nombre, enCalle }]
+  itemsDevolucion = signal<any[]>([]); // [{ producto_id, codigo, nombre, cantidad, enCalle }]
+  observacionDevolucion: string = '';
+  busquedaDevParcial = signal<string>('');
+  mostrarDropdownDevParcial = signal<boolean>(false);
+  historialDevoluciones = signal<any[]>([]);
+  devolucionesRemito = signal<any[]>([]); // historial en el detalle del remito
+
   // --- Ingreso rápido de mercadería ---
   mostrarIngresoRapido = signal<boolean>(false);
   busquedaIngreso = signal<string>('');
@@ -112,6 +122,7 @@ export class RemitosComponent {
     this.dropdownAbierto.set('');
     this.mostrarDropdown.set(false);
     this.mostrarDropdownDevolucion.set(false); // <-- agregar
+    this.mostrarDropdownDevParcial.set(false);
   }
 
   buscarJoya(termino: string) {
@@ -178,6 +189,34 @@ export class RemitosComponent {
       (g) =>
         (g.codigo || '').toLowerCase().includes(b) || (g.nombre || '').toLowerCase().includes(b),
     );
+  });
+
+  // Códigos que la vendedora tiene en calle (todos sus remitos pendientes), filtrados
+  codigosFiltradosDevParcial = computed(() => {
+    const b = this.busquedaDevParcial().toLowerCase().trim();
+    const codigos = this.codigosEnCalle();
+    if (!b) return codigos;
+    return codigos.filter(
+      (c) =>
+        (c.codigo || '').toLowerCase().includes(b) || (c.nombre || '').toLowerCase().includes(b),
+    );
+  });
+
+  // Resumen por producto para el detalle: entregado / devuelto parcial / queda
+  resumenDevolucionesRemito = computed(() => {
+    const activas = this.devolucionesRemito().filter((d) => d.estado === 'Activa');
+    const porProducto: { [id: number]: number } = {};
+    for (const d of activas) porProducto[d.producto_id] = (porProducto[d.producto_id] || 0) + d.cantidad;
+    return this.itemsEnDetalle()
+      .filter((i) => porProducto[i.producto_id])
+      .map((i) => ({
+        codigo: i.codigo,
+        nombre: i.nombre,
+        entregado: i.cantidad_entregada,
+        devueltoParcial: porProducto[i.producto_id],
+        queda: i.cantidad_entregada - porProducto[i.producto_id],
+      }))
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
   });
 
   resultadosIngreso = computed(() => {
@@ -276,6 +315,10 @@ export class RemitosComponent {
   abrirDetalle(remito: any) {
     this.vistaDetalleActual.set('entrega');
     this.remitoEnDetalle.set(remito);
+    this.devolucionesRemito.set([]);
+    this.remitoService.getDevolucionesRemito(remito.id).subscribe({
+      next: (devs) => this.devolucionesRemito.set(devs),
+    });
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (items) => {
         this.itemsEnDetalle.set(items);
@@ -326,6 +369,11 @@ export class RemitosComponent {
     this.remitoEnEdicion.set(remito);
     this.vendedorSeleccionado.set(remito.vendedor_id);
     this.remitoService.getRemitoItems(remito.id).subscribe((items) => {
+      if (remito.estado === 'Pendiente' && items.some((i: any) => i.cantidad_devuelta > 0)) {
+        this.cancelarEdicionRemito();
+        Swal.fire('No se puede editar', 'Este remito tiene devoluciones parciales. Anulalas primero.', 'warning');
+        return;
+      }
       const carritoEdit = items.map((i: any) => {
         const prodBase = this.productos().find((p) => p.id === i.producto_id);
         const stockActual = prodBase ? prodBase.stock_disponible : 0;
@@ -354,6 +402,7 @@ export class RemitosComponent {
     this.itemsEnDetalle.set([]);
     this.itemsAgrupados.set({});
     this.pagosEnDetalle.set([]);
+    this.devolucionesRemito.set([]);
   }
 
   // Nos dice cuántas unidades de un producto ya están cargadas en el remito actual
@@ -469,12 +518,19 @@ export class RemitosComponent {
     this.remitoService.getRemitoItems(remito.id).subscribe({
       next: (itemsBackend) => {
         const itemsClonados = itemsBackend
-          .map((item: any) => ({
-            ...item,
-            cantidad_entregada: item.cantidad_entregada || item.cantidad,
-            cantidad_vendida: 0,
-            cantidad_devuelta: item.cantidad_entregada || item.cantidad,
-          }))
+          .map((item: any) => {
+            const llevo = item.cantidad_entregada || item.cantidad;
+            const previa = item.cantidad_devuelta || 0; // devoluciones parciales ya registradas
+            const pendiente = llevo - previa;
+            return {
+              ...item,
+              cantidad_entregada: llevo,
+              devuelta_previa: previa,
+              pendiente,
+              cantidad_vendida: 0,
+              cantidad_devuelta: pendiente,
+            };
+          })
           .sort((a: any, b: any) =>
             a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
           );
@@ -496,7 +552,7 @@ export class RemitosComponent {
   actualizarCantidades(index: number, tipo: 'vendida' | 'devuelta') {
     const items = this.itemsLiquidacion();
     const item = items[index];
-    const total = item.cantidad_entregada;
+    const total = item.pendiente;
     if (!item.cantidad_vendida || item.cantidad_vendida < 0) item.cantidad_vendida = 0;
     if (!item.cantidad_devuelta || item.cantidad_devuelta < 0) item.cantidad_devuelta = 0;
     if (tipo === 'vendida') {
@@ -527,10 +583,10 @@ export class RemitosComponent {
     // --- VALIDACIÓN DE SEGURIDAD RESTAURADA ---
     for (const item of this.itemsLiquidacion()) {
       const suma = (item.cantidad_vendida || 0) + (item.cantidad_devuelta || 0);
-      if (suma !== item.cantidad_entregada) {
+      if (suma !== item.pendiente) {
         Swal.fire({
           title: 'Faltan declarar productos',
-          html: `Revisá el código <b>${item.codigo}</b>.<br>Se entregaron ${item.cantidad_entregada}, pero hay ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos.`,
+          html: `Revisá el código <b>${item.codigo}</b>.<br>Tenía ${item.pendiente} en calle, pero hay ${item.cantidad_vendida} vendidos y ${item.cantidad_devuelta} devueltos.`,
           icon: 'warning',
           confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
         });
@@ -594,6 +650,204 @@ export class RemitosComponent {
       next: (remitos) => this.remitosPendientesVendedor.set(remitos),
       error: () => Swal.fire('Error', 'No se pudieron cargar los remitos pendientes.', 'error'),
     });
+  }
+
+  // ============================================================
+  // DEVOLUCIONES PARCIALES
+  // ============================================================
+
+  abrirDevolucionVendedor() {
+    const nombre = this.filtroVendedor();
+    const vend = this.vendedores().find((v) => v.nombre === nombre);
+    if (!vend) {
+      Swal.fire('Elegí una vendedora', 'Seleccioná una en el filtro de arriba.', 'warning');
+      return;
+    }
+    this.itemsDevolucion.set([]);
+    this.observacionDevolucion = '';
+    this.busquedaDevParcial.set('');
+    this.devolucionVendedor.set({ id: vend.id!, nombre: vend.nombre });
+    this.cargarDatosDevolucion(vend.id!);
+  }
+
+  cargarDatosDevolucion(vendedorId: number) {
+    this.remitoService.getPendientesVendedor(vendedorId).subscribe({
+      next: (remitos) => {
+        // Sumamos lo que tiene en calle de cada producto entre todos sus remitos
+        const mapa: { [id: number]: any } = {};
+        for (const r of remitos) {
+          for (const it of r.items) {
+            if (!mapa[it.producto_id]) {
+              mapa[it.producto_id] = {
+                producto_id: it.producto_id,
+                codigo: it.codigo,
+                nombre: it.nombre,
+                enCalle: 0,
+              };
+            }
+            mapa[it.producto_id].enCalle += it.pendiente;
+          }
+        }
+        const codigos = Object.values(mapa).sort((a: any, b: any) =>
+          a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
+        );
+        this.codigosEnCalle.set(codigos);
+      },
+      error: () => Swal.fire('Error', 'No se pudieron cargar los remitos pendientes.', 'error'),
+    });
+    this.remitoService.getDevolucionesVendedor(vendedorId).subscribe({
+      next: (devs) => this.historialDevoluciones.set(devs),
+    });
+  }
+
+  cerrarDevolucionVendedor() {
+    this.devolucionVendedor.set(null);
+    this.codigosEnCalle.set([]);
+    this.itemsDevolucion.set([]);
+    this.historialDevoluciones.set([]);
+    this.observacionDevolucion = '';
+    this.busquedaDevParcial.set('');
+  }
+
+  buscarDevParcial(termino: string) {
+    this.busquedaDevParcial.set(termino);
+    this.mostrarDropdownDevParcial.set(true);
+  }
+
+  agregarItemDevolucion(codigo: any, cantidadStr: string, event: Event) {
+    event.stopPropagation();
+    const cantidad = parseInt(cantidadStr, 10) || 0;
+    if (cantidad < 1) return;
+
+    const items = this.itemsDevolucion();
+    const existe = items.find((i) => i.producto_id === codigo.producto_id);
+    const yaCargado = existe ? existe.cantidad : 0;
+
+    if (yaCargado + cantidad > codigo.enCalle) {
+      Swal.fire(
+        'Supera lo que tiene en calle',
+        `De ${codigo.codigo} tiene ${codigo.enCalle} en calle y ya cargaste ${yaCargado}.`,
+        'warning',
+      );
+      return;
+    }
+
+    if (existe) {
+      existe.cantidad += cantidad;
+      this.itemsDevolucion.set([...items]);
+    } else {
+      this.itemsDevolucion.set([...items, { ...codigo, cantidad }]);
+    }
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Devolución: ${cantidad}x ${codigo.codigo}`,
+      showConfirmButton: false,
+      timer: 1200,
+    });
+  }
+
+  editarCantidadDevolucion(item: any, valStr: any) {
+    let v = parseInt(valStr, 10) || 1;
+    if (v < 1) v = 1;
+    if (v > item.enCalle) v = item.enCalle;
+    item.cantidad = v;
+    this.itemsDevolucion.set([...this.itemsDevolucion()]);
+  }
+
+  quitarItemDevolucion(index: number) {
+    const items = [...this.itemsDevolucion()];
+    items.splice(index, 1);
+    this.itemsDevolucion.set(items);
+  }
+
+  totalUnidadesDevolucion(): number {
+    return this.itemsDevolucion().reduce((s, i) => s + i.cantidad, 0);
+  }
+
+  async confirmarDevolucion() {
+    const v = this.devolucionVendedor();
+    const items = this.itemsDevolucion();
+    if (!v) return;
+    if (items.length === 0) {
+      Swal.fire('Sin productos', 'Cargá al menos un producto devuelto.', 'warning');
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: '¿Registrar la devolución?',
+      html:
+        `Vuelven al stock <b>${this.totalUnidadesDevolucion()}</b> unidad(es) de ${v.nombre}.<br>` +
+        `Los remitos siguen abiertos.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, registrar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: this.configService.config()?.negocio.colorPrincipal,
+    });
+    if (!result.isConfirmed) return;
+
+    const payload = {
+      items: items.map((i) => ({ producto_id: i.producto_id, cantidad: i.cantidad })),
+      observacion: this.observacionDevolucion.trim(),
+    };
+
+    this.remitoService.registrarDevolucion(v.id, payload).subscribe({
+      next: (resp) => {
+        const remitos = [...new Set((resp.asignaciones || []).map((a: any) => a.remito_id))];
+        Swal.fire(
+          'Devolución registrada',
+          `La mercadería volvió al stock. Se descontó de: #${remitos.join(', #')}.`,
+          'success',
+        );
+        this.itemsDevolucion.set([]);
+        this.observacionDevolucion = '';
+        this.cargarDatosDevolucion(v.id);
+        this.cargarDatosBase();
+        this.cargarHistorialRemitos();
+      },
+      error: (e) =>
+        Swal.fire('Error', e?.error?.error || 'No se pudo registrar la devolución.', 'error'),
+    });
+  }
+
+  async anularDevolucion(dev: any) {
+    const v = this.devolucionVendedor();
+    const result = await Swal.fire({
+      title: `¿Anular la devolución del ${new Date(dev.fecha).toLocaleDateString('es-AR')}?`,
+      html: 'La mercadería vuelve a figurar en calle y se descuenta del stock.<br>La devolución queda en el historial como anulada.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, anular',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+    });
+    if (!result.isConfirmed) return;
+
+    this.remitoService.anularDevolucion(dev.id).subscribe({
+      next: () => {
+        Swal.fire('Anulada', 'La devolución fue anulada y el stock revertido.', 'success');
+        if (v) this.cargarDatosDevolucion(v.id);
+        this.cargarDatosBase();
+      },
+      error: (e) =>
+        Swal.fire('No se pudo anular', e?.error?.error || 'Error al anular la devolución.', 'error'),
+    });
+  }
+
+  // Agrupa los ítems de una devolución por código: "PU104 x3 (#48, #58)"
+  resumenItemsDevolucion(dev: any): { codigo: string; nombre: string; cantidad: number; remitos: string }[] {
+    const mapa: { [cod: string]: any } = {};
+    for (const it of dev.items || []) {
+      if (!mapa[it.codigo]) mapa[it.codigo] = { codigo: it.codigo, nombre: it.nombre, cantidad: 0, remitos: new Set() };
+      mapa[it.codigo].cantidad += it.cantidad;
+      mapa[it.codigo].remitos.add(it.remito_id);
+    }
+    return Object.values(mapa)
+      .map((m: any) => ({ ...m, remitos: '#' + [...m.remitos].join(', #') }))
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
   }
 
   cerrarLiquidacionVendedor() {
@@ -749,6 +1003,7 @@ export class RemitosComponent {
     }
 
     const remitosMap: { [id: number]: any } = {};
+    for (const id of this.remitosSeleccionados()) remitosMap[id] = { remito_id: id, items: [] };
     for (const grupo of this.gruposLiquidacion()) {
       for (const slot of grupo.slots) {
         if (!remitosMap[slot.remito_id]) {
