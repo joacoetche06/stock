@@ -1,0 +1,143 @@
+.lista-precios {
+  max-width: 1000px;
+}
+
+.ayuda {
+  margin-top: 0;
+  color: #555;
+}
+
+.origen {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0 12px;
+}
+
+.opcion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 2px solid var(--color-secundario);
+  border-radius: 8px;
+  background: var(--color-blanco);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.opcion.activa {
+  border-color: var(--color-principal);
+}
+
+.selector-remito select {
+  font-size: 18px;
+  padding: 10px;
+  min-width: 420px;
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+.tip {
+  font-size: 15px;
+  color: #666;
+  margin: 8px 0 0;
+}
+
+.acciones {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0 12px;
+}
+
+.resumen {
+  margin-right: auto;
+}
+
+.acciones button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: white;
+}
+
+.btn-pdf {
+  background: var(--color-texto);
+}
+
+.btn-celu {
+  background: var(--color-principal);
+}
+
+
+.aviso {
+  background: #fff3cd;
+  border: 1px solid #ffe08a;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+tr.sin-precio td {
+  background: #fff3cd;
+}
+
+/* La zona de impresión no se ve en pantalla; printToPDF usa @media print */
+@media screen {
+  #zona-impresion {
+    display: none;
+  }
+}
+
+@media print {
+  .imp-titulo {
+    font-size: 22px;
+    margin: 0 0 4px;
+  }
+
+  .imp-sub {
+    font-size: 14px !important;
+    margin: 0 0 12px;
+    color: #555;
+  }
+
+  .imp-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+    table-layout: fixed;
+  }
+
+  .imp-categoria {
+    text-align: left;
+    font-size: 18px;
+    padding: 6px 8px !important;
+    border-bottom: 2px solid #333;
+    background: none !important;
+    color: #000 !important;
+  }
+
+  .imp-tabla td {
+    border-bottom: 1px solid #ddd;
+    font-size: 17px;
+  }
+
+  .imp-codigo {
+    font-weight: bold;
+    width: 13%;
+  }
+
+  .imp-precio {
+    text-align: right;
+    width: 20%;
+    border-right: 2px solid #999;
+  }
+
+  .imp-tabla td.imp-precio:last-child {
+    border-right: none;
+  }
+}

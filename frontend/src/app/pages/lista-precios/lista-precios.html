@@ -1,0 +1,104 @@
+<div class="lista-precios">
+  <h2>Lista de precios</h2>
+  <p class="ayuda">
+    Elegí qué {{ configService.nombreProductoPlural }} entran en la lista. Podés guardarla en PDF para imprimir
+    o exportarla para buscar precios desde el celular.
+  </p>
+
+  <div class="origen">
+    <label class="opcion" [class.activa]="origen() === 'remito'">
+      <input type="radio" name="origen" [checked]="origen() === 'remito'" (change)="cambiarOrigen('remito')" />
+      Lo que lleva un remito
+    </label>
+    <label class="opcion" [class.activa]="origen() === 'stock'">
+      <input type="radio" name="origen" [checked]="origen() === 'stock'" (change)="cambiarOrigen('stock')" />
+      Todo el stock disponible
+    </label>
+  </div>
+
+  @if (origen() === 'remito') {
+    <div class="selector-remito">
+      @if (remitos().length) {
+        <select [ngModel]="remitoId()" (ngModelChange)="elegirRemito($event)">
+          <option [ngValue]="null">Elegí un remito pendiente…</option>
+          @for (r of remitos(); track r.id) {
+            <option [ngValue]="r.id">#{{ r.id }} · {{ r.vendedor }} · {{ r.fecha_salida | date: 'dd/MM/yyyy' }}</option>
+          }
+        </select>
+        <p class="tip">
+          Para una feria, creá una {{ nombreVendedor }} llamada por ejemplo "Feria Country" y hacele un remito con lo
+          que llevás. Al volver, liquidás ese remito como cualquier otro.
+        </p>
+      } @else {
+        <p class="tip">No hay remitos pendientes. Usá "Todo el stock disponible" o creá un remito primero.</p>
+      }
+    </div>
+  }
+
+  @if (cargando()) {
+    <p>Cargando…</p>
+  } @else if (items().length) {
+    <div class="acciones">
+      <span class="resumen">
+        <strong>{{ items().length }}</strong> {{ configService.nombreProductoPlural }} en la lista
+      </span>
+      <button class="btn-pdf" (click)="guardarPdf()">🖨️ Guardar PDF</button>
+      <button class="btn-celu" (click)="mostrarLinkCelular()">📱 Pasar al celular</button>
+    </div>
+
+    @if (sinPrecio() > 0) {
+      <p class="aviso">⚠️ Hay {{ sinPrecio() }} {{ configService.nombreProductoPlural }} sin precio cargado. Revisalos en el inventario antes de exportar.</p>
+    }
+
+    <table class="vista-previa">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Categoría</th>
+          <th style="text-align: right">Precio</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (it of items(); track it.codigo) {
+          <tr [class.sin-precio]="!it.precio">
+            <td><strong>{{ it.codigo }}</strong></td>
+            <td>{{ it.nombre }}</td>
+            <td>{{ it.categoria }}</td>
+            <td style="text-align: right">{{ formatoPrecio(it.precio) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (origen() === 'stock' || remitoId()) {
+    <p>No hay {{ configService.nombreProductoPlural }} para mostrar.</p>
+  }
+
+  <!-- ZONA DE IMPRESIÓN: oculta en pantalla, la usa printToPDF (ver @media print en styles.css) -->
+  @if (items().length) {
+    <div id="zona-impresion">
+      <h2 class="imp-titulo">{{ nombreNegocio }}: lista de precios</h2>
+      <p class="imp-sub">{{ descripcionOrigen() }}, generada el {{ formatoFecha(generadaEl()) }}</p>
+
+      @for (g of grupos(); track g.categoria) {
+        <table class="imp-tabla">
+          <thead>
+            <tr>
+              <th colspan="6" class="imp-categoria">{{ g.categoria }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (fila of g.filas; track $index) {
+              <tr>
+                @for (celda of fila; track $index) {
+                  <td class="imp-codigo">{{ celda?.codigo }}</td>
+                  <td class="imp-precio">{{ celda ? formatoPrecio(celda.precio) : '' }}</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  }
+</div>
