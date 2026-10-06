@@ -25,6 +25,12 @@
     "extraResources": [
       "app-adri.sqlite"
     ],
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/sqlite3/**",
+      "node_modules/bindings/**",
+      "node_modules/file-uri-to-path/**"
+    ],
     "win": {
       "target": "nsis",
       "icon": "public/frontend/browser/logo.ico"
