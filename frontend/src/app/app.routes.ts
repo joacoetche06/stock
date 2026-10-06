@@ -3,6 +3,7 @@ import { ProductosComponent } from './pages/productos/productos';
 import { VendedoresComponent } from './pages/vendedores/vendedores';
 import { RemitosComponent } from './pages/remitos/remitos';
 import { EtiquetasComponent } from './pages/etiquetas/etiquetas';
+import { ListaPreciosComponent } from './pages/lista-precios/lista-precios';
 export const routes: Routes = [
   { path: 'productos', component: ProductosComponent },
   { path: 'vendedores', component: VendedoresComponent },
@@ -11,4 +12,6 @@ export const routes: Routes = [
 
   // Si alguien entra a la raíz vacía, lo mandamos a productos por defecto
   { path: '', redirectTo: '/productos', pathMatch: 'full' },
+  { path: 'etiquetas', component: EtiquetasComponent },
+  { path: 'lista-precios', component: ListaPreciosComponent },
 ];
