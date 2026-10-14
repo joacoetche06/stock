@@ -294,6 +294,19 @@ export class ProductosComponent {
     const lista = this.productos().filter((p) => p.stock_real > 0);
     if (lista.length === 0) { Swal.fire('Lista vacía', 'No hay productos con stock mayor a cero.', 'info'); return; }
 
+    // Orden de categorías según config.json; las desconocidas van al final
+    const ordenCats = this.categorias.map((c) => c.nombre);
+    const idxCat = (cat?: string) => {
+      const i = ordenCats.indexOf(cat || '');
+      return i === -1 ? ordenCats.length : i;
+    };
+
+    lista.sort((a, b) =>
+      idxCat(a.categoria) - idxCat(b.categoria) ||
+      (a.categoria || '').localeCompare(b.categoria || '') ||
+      (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true })
+    );
+
     const doc = new jsPDF();
     const fecha = new Date().toLocaleDateString();
     const negocio = this.configService.nombreNegocio;
@@ -304,13 +317,31 @@ export class ProductosComponent {
     doc.text(`Fecha: ${fecha}`, 14, 28);
 
     let y = 40;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Código', 14, y); doc.text('Descripción', 40, y); doc.text('Material', 120, y); doc.text('Precio', 170, y);
-    doc.line(14, y + 2, 195, y + 2);
-    y += 10;
+    const encabezadoColumnas = () => {
+      doc.setFont('helvetica', 'bold');
+      doc.text('Código', 14, y); doc.text('Descripción', 40, y); doc.text('Material', 120, y); doc.text('Precio', 170, y);
+      doc.line(14, y + 2, 195, y + 2);
+      y += 10;
+      doc.setFont('helvetica', 'normal');
+    };
+    encabezadoColumnas();
 
-    doc.setFont('helvetica', 'normal');
+    let catActual: string | null = null;
     lista.forEach((p) => {
+      const cat = p.categoria || 'Sin categoría';
+
+      if (cat !== catActual) {
+        if (y > 262) { doc.addPage(); y = 20; }
+        y += 4;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(cat, 14, y);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        y += 8;
+        catActual = cat;
+      }
+
       if (y > 280) { doc.addPage(); y = 20; }
       doc.text(p.codigo ? String(p.codigo) : '-', 14, y);
       doc.text(p.nombre ? String(p.nombre).substring(0, 40) : '-', 40, y);
