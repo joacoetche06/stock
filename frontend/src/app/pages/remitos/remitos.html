@@ -319,6 +319,14 @@
       >
         ↩️ Devolución de {{ filtroVendedor() }}
       </button>
+      <button
+        *ngIf="filtroVendedor()"
+        (click)="abrirCuentaVendedor()"
+        class="btn btn-exito"
+        style="padding: 8px 14px; background-color: #28a745"
+      >
+        💵 Cuenta de {{ filtroVendedor() }}
+      </button>
     </div>
 
     <h3 id="historial-remitos" style="color: var(--color-texto); scroll-margin-top: 20px">
@@ -350,15 +358,16 @@
             </div>
             <div *ngIf="r.estado === 'Cerrado'">
               <div style="font-size: 0.85em">
-                <div *ngIf="r.total_rendir - r.abonado > 0">
+                <div *ngIf="deudaRemito(r) > 0">
                   <span style="color: #dc3545; font-weight: bold"
-                    >Debe: ${{ r.total_rendir - r.abonado | number: '1.0-0' }}</span
+                    >Debe: ${{ deudaRemito(r) | number: '1.0-2' }}</span
                   >
                   <br /><small>Total: ${{ r.total_rendir | number: '1.0-0' }}</small>
                 </div>
-                <div *ngIf="r.total_rendir - r.abonado <= 0">
+                <div *ngIf="deudaRemito(r) <= 0">
                   <span style="color: #28a745; font-weight: bold">✅ PAGADO</span>
                 </div>
+                <small *ngIf="r.en_cuenta" style="color: #6c757d">💵 Cuenta corriente</small>
               </div>
             </div>
           </td>
@@ -367,7 +376,7 @@
               Ver
             </button>
             <button
-              *ngIf="r.estado === 'Cerrado' && r.total_rendir - r.abonado > 0"
+              *ngIf="r.estado === 'Cerrado' && !r.en_cuenta && deudaRemito(r) > 0"
               (click)="registrarPago(r)"
               class="btn btn-exito"
               style="padding: 6px 10px; background-color: #28a745"
@@ -1325,6 +1334,292 @@
   </div>
 </div>
 
+<!-- ===== MODAL CUENTA CORRIENTE POR VENDEDORA ===== -->
+<div
+  *ngIf="cuentaVendedor()"
+  style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1050;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(2px);
+  "
+>
+  <div
+    class="tarjeta"
+    style="
+      width: 90%;
+      max-width: 950px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 35px;
+      margin: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      position: relative;
+    "
+    (click)="$event.stopPropagation()"
+  >
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #f1f3f5;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+      "
+    >
+      <h2 style="margin: 0; color: var(--color-principal); font-size: 1.6em">Cuenta corriente</h2>
+      <span style="font-size: 1.2em; font-weight: bold; color: #495057">{{
+        cuentaVendedor()?.nombre
+      }}</span>
+    </div>
+
+    <p *ngIf="!cuentaDatos()" style="color: #6c757d">Cargando...</p>
+
+    <ng-container *ngIf="cuentaDatos() as c">
+      <!-- Saldo -->
+      <div
+        class="cuenta-saldo"
+        [style.background]="c.saldo > 0 ? '#fdecea' : c.saldo < 0 ? '#e8f5e9' : '#f1f3f5'"
+        [style.border-color]="c.saldo > 0 ? '#dc3545' : c.saldo < 0 ? '#28a745' : '#ced4da'"
+      >
+        <div style="font-size: 0.95em; color: #495057">Saldo</div>
+        <div
+          style="font-size: 2em; font-weight: bold"
+          [style.color]="c.saldo > 0 ? '#dc3545' : c.saldo < 0 ? '#28a745' : '#495057'"
+        >
+          {{ textoSaldo(c.saldo) }}
+        </div>
+        <div style="font-size: 0.9em; color: #6c757d">
+          Liquidado {{ formatoPesos(c.total_liquidado) }} · Pagado
+          {{ formatoPesos(c.total_pagos_cuenta + c.total_pagado_directo) }}
+        </div>
+      </div>
+
+      <div *ngIf="c.deuda_anterior.length > 0" class="cuenta-aviso">
+        <strong>Ojo:</strong> tiene remitos liquidados antes de la cuenta corriente que todavía
+        deben:
+        <span *ngFor="let r of c.deuda_anterior; let last = last"
+          >#{{ r.id }} ({{ formatoPesos(r.debe) }}){{ last ? '' : ', ' }}</span
+        >. Esos se cobran aparte con <b>💰 Cobrar</b> en el historial; los pagos de acá no los
+        tocan.
+      </div>
+      <div *ngIf="c.sin_liquidar.length > 0" style="color: #6c757d; margin-bottom: 15px">
+        Remitos sin liquidar (todavía no suman a la cuenta):
+        <span *ngFor="let r of c.sin_liquidar; let last = last"
+          >#{{ r.id }}{{ last ? '' : ', ' }}</span
+        >
+      </div>
+
+      <!-- Registrar pago -->
+      <div class="cuenta-pago">
+        <strong style="white-space: nowrap">💵 Registrar pago:</strong>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Monto"
+          [(ngModel)]="montoPagoCuenta"
+          (keyup.enter)="registrarPagoCuenta()"
+          class="input-form"
+          style="width: 150px"
+        />
+        <input
+          type="text"
+          placeholder="Observación (opcional)"
+          [(ngModel)]="observacionPagoCuenta"
+          class="input-form"
+          style="flex: 1; min-width: 150px"
+        />
+        <button
+          (click)="registrarPagoCuenta()"
+          class="btn btn-exito"
+          style="background-color: #28a745; padding: 8px 16px"
+          [disabled]="!montoPagoCuenta || montoPagoCuenta <= 0"
+        >
+          ✔ Registrar
+        </button>
+      </div>
+
+      <!-- Remitos -->
+      <h3 style="color: #343a40; margin-bottom: 8px">Remitos liquidados</h3>
+      <p *ngIf="c.remitos.length === 0" style="color: #6c757d; margin-top: 0">
+        Todavía no hay remitos liquidados desde que arrancó la cuenta corriente.
+      </p>
+      <table
+        *ngIf="c.remitos.length > 0"
+        style="width: 100%; border-collapse: collapse; margin-bottom: 20px"
+      >
+        <thead>
+          <tr style="background-color: #343a40; color: #fff">
+            <th style="padding: 8px; text-align: left">Remito</th>
+            <th style="padding: 8px; text-align: left">Salida</th>
+            <th style="padding: 8px; text-align: left">Liquidado</th>
+            <th style="padding: 8px; text-align: right">A rendir</th>
+            <th style="padding: 8px; text-align: right">Cubierto</th>
+            <th style="padding: 8px; text-align: right">Falta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of c.remitos" style="border-bottom: 1px solid #dee2e6">
+            <td style="padding: 8px; font-weight: bold"># {{ r.id }}</td>
+            <td style="padding: 8px">{{ r.fecha_salida }}</td>
+            <td style="padding: 8px">{{ r.fecha_liquidacion | date: 'dd/MM/yyyy' }}</td>
+            <td style="padding: 8px; text-align: right">{{ formatoPesos(r.total) }}</td>
+            <td style="padding: 8px; text-align: right">{{ formatoPesos(r.cubierto) }}</td>
+            <td
+              style="padding: 8px; text-align: right; font-weight: bold"
+              [style.color]="r.pendiente > 0 ? '#dc3545' : '#28a745'"
+            >
+              {{ r.pendiente > 0 ? formatoPesos(r.pendiente) : '✅' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Pagos -->
+      <h3 style="color: #343a40; margin-bottom: 8px">Pagos a cuenta</h3>
+      <p *ngIf="c.pagos.length === 0" style="color: #6c757d; margin-top: 0">
+        Todavía no hay pagos a cuenta.
+      </p>
+      <table
+        *ngIf="c.pagos.length > 0"
+        style="width: 100%; border-collapse: collapse; margin-bottom: 20px"
+      >
+        <tbody>
+          <tr
+            *ngFor="let p of c.pagos"
+            style="border-bottom: 1px solid #dee2e6"
+            [style.opacity]="p.estado === 'Anulada' ? 0.55 : 1"
+          >
+            <td style="padding: 8px">📅 {{ p.fecha | date: 'dd/MM/yyyy - HH:mm' }}</td>
+            <td
+              style="padding: 8px; text-align: right; font-weight: bold"
+              [style.text-decoration]="p.estado === 'Anulada' ? 'line-through' : 'none'"
+            >
+              {{ formatoPesos(p.monto) }}
+            </td>
+            <td style="padding: 8px; color: #6c757d; font-style: italic">{{ p.observacion }}</td>
+            <td style="padding: 8px; text-align: right; white-space: nowrap">
+              <span *ngIf="p.estado === 'Anulada'" style="color: #dc3545; font-weight: bold"
+                >ANULADO {{ p.fecha_anulacion | date: 'dd/MM/yyyy' }}</span
+              >
+              <button
+                *ngIf="p.estado === 'Activa'"
+                (click)="anularPagoCuenta(p)"
+                class="btn btn-peligro"
+                style="padding: 4px 10px; font-size: 0.85em"
+              >
+                Anular
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ZONA DE IMPRESIÓN del resumen: oculta en pantalla (ver styles.css) -->
+      <div id="resumen-cuenta">
+        <div style="text-align: center">
+          <img src="logo.ico" alt="Logo" style="height: 110px; width: auto" />
+          <h2 style="margin: 6px 0 2px; font-size: 22px; text-transform: uppercase">
+            Resumen de cuenta corriente
+          </h2>
+          <p style="margin: 0; color: #555">{{ nombreNegocio }}</p>
+        </div>
+        <p class="rc-datos">
+          <strong>{{ nombreVendedor | titlecase }}:</strong> {{ c.vendedor.nombre }}<br />
+          <strong>Fecha:</strong> {{ c.generado | date: 'dd/MM/yyyy' }}
+        </p>
+
+        <p
+          class="rc-saldo"
+          [style.color]="c.saldo > 0 ? '#c0392b' : c.saldo < 0 ? '#1e7e34' : '#333'"
+        >
+          Saldo: {{ textoSaldo(c.saldo) }}
+        </p>
+
+        <h3 class="rc-titulo">Remitos liquidados</h3>
+        <table class="rc-tabla" *ngIf="c.remitos.length > 0">
+          <thead>
+            <tr>
+              <th style="text-align: left">Remito</th>
+              <th style="text-align: left">Liquidado</th>
+              <th style="text-align: right">A rendir</th>
+              <th style="text-align: right">Pagado</th>
+              <th style="text-align: right">Falta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of c.remitos">
+              <td>N° {{ r.id }}</td>
+              <td>{{ r.fecha_liquidacion | date: 'dd/MM/yyyy' }}</td>
+              <td style="text-align: right">{{ formatoPesos(r.total) }}</td>
+              <td style="text-align: right">{{ formatoPesos(r.cubierto) }}</td>
+              <td style="text-align: right; font-weight: bold">
+                {{ r.pendiente > 0 ? formatoPesos(r.pendiente) : 'Pagado' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p *ngIf="c.remitos.length === 0">Sin remitos liquidados.</p>
+
+        <h3 class="rc-titulo">Pagos</h3>
+        <table class="rc-tabla" *ngIf="pagosCuentaActivos().length > 0">
+          <thead>
+            <tr>
+              <th style="text-align: left">Fecha</th>
+              <th style="text-align: left">Detalle</th>
+              <th style="text-align: right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of pagosCuentaActivos()">
+              <td>{{ p.fecha | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ p.observacion }}</td>
+              <td style="text-align: right">{{ formatoPesos(p.monto) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p *ngIf="pagosCuentaActivos().length === 0">Sin pagos registrados.</p>
+        <p *ngIf="c.total_pagado_directo > 0">
+          Pagos cargados directo en los remitos: {{ formatoPesos(c.total_pagado_directo) }}
+        </p>
+
+        <table class="rc-totales">
+          <tr>
+            <td>Total liquidado</td>
+            <td style="text-align: right">{{ formatoPesos(c.total_liquidado) }}</td>
+          </tr>
+          <tr>
+            <td>Total pagado</td>
+            <td style="text-align: right">
+              {{ formatoPesos(c.total_pagos_cuenta + c.total_pagado_directo) }}
+            </td>
+          </tr>
+          <tr class="rc-total-final">
+            <td>{{ c.saldo < 0 ? 'Saldo a favor' : 'Saldo a pagar' }}</td>
+            <td style="text-align: right">{{ formatoPesos(c.saldo < 0 ? -c.saldo : c.saldo) }}</td>
+          </tr>
+        </table>
+      </div>
+    </ng-container>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px">
+      <button (click)="cerrarCuentaVendedor()" class="btn btn-secundario">Cerrar</button>
+      <button (click)="guardarPdfCuenta()" class="btn btn-principal" [disabled]="!cuentaDatos()">
+        💾 Guardar PDF
+      </button>
+    </div>
+  </div>
+</div>
+
 <div
   *ngIf="remitoEnDetalle()"
   id="detalle-remito"
@@ -1745,6 +2040,12 @@
       >
         Registro de Cobros - Remito {{ remitoEnDetalle().id }} - {{ remitoEnDetalle().vendedor }}
       </h3>
+      <p *ngIf="remitoEnDetalle().en_cuenta" style="margin: 10px 0 0">
+        Este remito se paga por la <strong>cuenta corriente</strong> de
+        {{ remitoEnDetalle().vendedor }}: los pagos a cuenta lo cubren con
+        <strong>$ {{ remitoEnDetalle().cubierto | number: '1.0-2' }}</strong> de
+        $ {{ remitoEnDetalle().total_rendir | number: '1.0-2' }}.
+      </p>
       <table style="width: 100%; border-collapse: collapse; margin-top: 15px">
         <thead>
           <tr style="border: 2px solid var(--color-principal); color: var(--color-principal)">
@@ -1782,7 +2083,11 @@
                 border: 1px solid var(--color-principal);
               "
             >
-              No hay pagos registrados para este remito todavía.
+              {{
+                remitoEnDetalle().en_cuenta
+                  ? 'Sin pagos cargados directo a este remito (se paga por cuenta corriente).'
+                  : 'No hay pagos registrados para este remito todavía.'
+              }}
             </td>
           </tr>
         </tbody>
@@ -1799,11 +2104,8 @@
       >
         Deuda Restante:
         <strong
-          [style.color]="
-            remitoEnDetalle().total_rendir - remitoEnDetalle().abonado > 0 ? '#dc3545' : '#28a745'
-          "
-          >$
-          {{ remitoEnDetalle().total_rendir - remitoEnDetalle().abonado | number: '1.0-0' }}</strong
+          [style.color]="deudaRemito(remitoEnDetalle()) > 0 ? '#dc3545' : '#28a745'"
+          >$ {{ deudaRemito(remitoEnDetalle()) | number: '1.0-2' }}</strong
         >
       </div>
     </div>
