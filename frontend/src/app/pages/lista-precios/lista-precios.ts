@@ -39,7 +39,7 @@ const INCLUIR_NOMBRES = false;
   styleUrl: './lista-precios.css',
 })
 export class ListaPreciosComponent {
-  origen = signal<Origen>('remito');
+  origen = signal<Origen>('stock');
   remitos = signal<any[]>([]);
   remitoId = signal<number | null>(null);
   items = signal<ItemLista[]>([]);
@@ -51,7 +51,7 @@ export class ListaPreciosComponent {
   remitoSeleccionado = computed(() => this.remitos().find((r) => r.id === this.remitoId()) ?? null);
 
   descripcionOrigen = computed(() => {
-    if (this.origen() === 'stock') return 'Stock disponible';
+    if (this.origen() === 'stock') return 'Todo el stock';
     const r = this.remitoSeleccionado();
     return r ? `Remito #${r.id} (${r.vendedor})` : '';
   });
@@ -99,6 +99,7 @@ export class ListaPreciosComponent {
         }
       }
       this.cargarRemitos();
+      this.cargarDesdeStock();
     });
   }
 
@@ -117,7 +118,6 @@ export class ListaPreciosComponent {
           .filter((r) => r.estado === 'Pendiente')
           .sort((a, b) => b.id - a.id);
         this.remitos.set(pendientes);
-        if (pendientes.length === 0) this.cambiarOrigen('stock');
       },
       error: () => Swal.fire('Error', 'No se pudieron cargar los remitos.', 'error'),
     });
@@ -157,7 +157,7 @@ export class ListaPreciosComponent {
   private cargarDesdeStock() {
     this.cargando.set(true);
     this.productoService.getProductos().subscribe({
-      next: (data) => this.setItems(data.filter((p) => (p.stock_disponible ?? 0) > 0)),
+      next: (data) => this.setItems(data.filter((p) => (p.stock_real ?? 0) > 0)),
       error: () => {
         this.cargando.set(false);
         Swal.fire('Error', 'No se pudieron cargar los productos.', 'error');

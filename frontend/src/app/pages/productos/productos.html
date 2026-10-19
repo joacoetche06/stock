@@ -27,6 +27,7 @@
           </div>
         </div>
         <button type="button" *ngIf="!editandoId()" (click)="agregarCategoria()" class="btn btn-principal" style="padding: 0 10px; height: 40px; font-size: 1.2em;" title="Crear Categoría">+</button>
+        <button type="button" *ngIf="!editandoId()" (click)="quitarCategoria()" class="btn btn-secundario" style="padding: 0 10px; height: 40px; font-size: 1.2em;" title="Borrar una categoría sin productos">−</button>
       </div>
 
       <!-- MEDIDA (solo aparece si usaMedida y la categoría seleccionada es la que la requiere) -->
@@ -132,10 +133,6 @@
     <button (click)="aplicarAumentoMasivo()" class="btn btn-principal">🚀 Actualizar Precios</button>
   </div>
 
-  <button (click)="descargarListaPrecios()" class="btn btn-secundario" style="background-color: #28a745; color: white; margin-bottom: 20px">
-    📄 Descargar Lista de Precios (Stock Disp. > 0)
-  </button>
-
   <!-- TABLA -->
   <table style="max-width: 900px">
     <thead style="user-select: none; background-color: var(--color-texto); color: var(--color-blanco);">
@@ -180,6 +177,7 @@
               </strong>
               <div *ngFor="let d of prod.distribucion" style="font-size: 0.85em; text-align: left; white-space: nowrap; color: white;">
                 {{ d.vendedor }}: <strong style="color: var(--color-secundario)">{{ d.cantidad }}</strong>
+                <span style="color: #ced4da"> (remito #{{ d.remito_id }})</span>
               </div>
             </div>
 

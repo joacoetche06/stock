@@ -77,15 +77,27 @@
             </select>
 
             <input
+              id="busqueda-remito"
               type="text"
-              [placeholder]="'🔍 Buscar (código, nombre)...'"
+              [placeholder]="'🔍 Código + Enter, o buscá por nombre...'"
               [ngModel]="terminoBusqueda()"
               (ngModelChange)="buscarJoya($event)"
+              (keydown.enter)="agregarPorEnter($event)"
               (focus)="mostrarDropdown.set(true)"
               class="input-form"
-              style="width: 65%; box-sizing: border-box; font-size: 1.1em"
+              style="flex: 1 1 auto; min-width: 0; box-sizing: border-box; font-size: 1.1em"
               autocomplete="off"
             />
+
+            <button
+              type="button"
+              (click)="abrirNuevoProducto()"
+              class="btn btn-principal"
+              style="padding: 0 14px; font-size: 1.3em; flex: 0 0 auto"
+              [title]="'Dar de alta una ' + nombreProducto + ' nueva'"
+            >
+              +
+            </button>
           </div>
 
           <button
@@ -93,7 +105,7 @@
             class="btn"
             style="background: #6c757d; color: #fff; padding: 6px 12px; margin-bottom: 8px; font-size: 0.9em"
           >
-            ➕ ¿No encontrás algo? Cargar mercadería
+            📦 Sumar stock a una {{ nombreProducto }} que ya existe
           </button>
 
           <div
@@ -309,7 +321,9 @@
       </button>
     </div>
 
-    <h3 style="color: var(--color-texto)">Historial de Remitos Emitidos</h3>
+    <h3 id="historial-remitos" style="color: var(--color-texto); scroll-margin-top: 20px">
+      Historial de Remitos Emitidos
+    </h3>
     <table>
       <thead>
         <tr>
@@ -322,7 +336,7 @@
       </thead>
       <tbody>
         <tr
-          *ngFor="let r of remitosFiltrados()"
+          *ngFor="let r of remitosPagina()"
           style="text-align: center; border-bottom: 1px solid #eee"
         >
           <td style="color: #6c757d; font-weight: bold"># {{ r.id }}</td>
@@ -386,6 +400,32 @@
         </tr>
       </tbody>
     </table>
+
+    <div
+      *ngIf="totalPaginasRemitos() > 1"
+      style="display: flex; align-items: center; justify-content: center; gap: 10px; margin: 15px 0"
+    >
+      <button
+        class="btn btn-secundario"
+        style="padding: 6px 12px"
+        [disabled]="paginaRemitosActual() === 1"
+        (click)="irAPaginaRemitos(paginaRemitosActual() - 1)"
+      >
+        ← Más nuevos
+      </button>
+      <span style="color: var(--color-texto)">
+        Página <strong>{{ paginaRemitosActual() }}</strong> de {{ totalPaginasRemitos() }}
+        <small style="color: #6c757d">({{ remitosFiltrados().length }} remitos)</small>
+      </span>
+      <button
+        class="btn btn-secundario"
+        style="padding: 6px 12px"
+        [disabled]="paginaRemitosActual() === totalPaginasRemitos()"
+        (click)="irAPaginaRemitos(paginaRemitosActual() + 1)"
+      >
+        Más viejos →
+      </button>
+    </div>
   </div>
 
   <div style="flex: 1 1 40%; min-width: 0; position: sticky; top: 20px">
@@ -1287,8 +1327,9 @@
 
 <div
   *ngIf="remitoEnDetalle()"
+  id="detalle-remito"
   class="tarjeta"
-  style="margin-top: 30px; background-color: #f8f9fa; max-width: 100%"
+  style="margin-top: 30px; background-color: #f8f9fa; max-width: 100%; scroll-margin-top: 20px"
 >
   <div
     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px"
@@ -1296,7 +1337,7 @@
     <h3 style="margin-top: 0; color: var(--color-texto)">
       Detalle del Remito #{{ remitoEnDetalle().id }} - {{ remitoEnDetalle().vendedor }}
     </h3>
-    <button (click)="cerrarDetalle()" class="btn btn-secundario">❌ Cerrar</button>
+    <button (click)="cerrarDetalleYVolver()" class="btn btn-secundario">❌ Cerrar</button>
   </div>
 
   <div
@@ -1834,7 +1875,7 @@
   </div>
 </div>
 
-<!-- MODAL DE INGRESO RÁPIDO DE MERCADERÍA -->
+<!-- MODAL: SUMAR STOCK A UN PRODUCTO EXISTENTE -->
 <div
   *ngIf="mostrarIngresoRapido()"
   (click)="cerrarIngresoRapido()"
@@ -1844,7 +1885,7 @@
     (click)="$event.stopPropagation()"
     style="background: #fff; border-radius: 8px; padding: 25px; width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto"
   >
-    <h3 style="margin-top: 0">Cargar mercadería al stock</h3>
+    <h3 style="margin-top: 0">📦 Sumar stock a una {{ nombreProducto }} que ya existe</h3>
 
     <ng-container *ngIf="!productoIngreso()">
       <input
@@ -1872,26 +1913,13 @@
         *ngIf="busquedaIngreso().trim() && resultadosIngreso().length === 0"
         style="margin-top: 15px; padding: 15px; background: #fff8e1; border-radius: 6px"
       >
-        No hay ningún producto con ese código o nombre. Completá los datos para darlo de alta:
-      </div>
-
-      <div *ngIf="busquedaIngreso().trim() && resultadosIngreso().length === 0" style="margin-top: 15px">
-        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.categoria">
-          <option value="">Categoría...</option>
-          <option *ngFor="let c of configService.categorias" [value]="c.nombre">{{ c.nombre }}</option>
-        </select>
-        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.material">
-          <option value="">Material...</option>
-          <option *ngFor="let m of configService.materiales" [value]="m">{{ m }}</option>
-        </select>
-        <select class="input-form custom-select" style="width: 100%; margin-bottom: 10px" [(ngModel)]="nuevoProducto.medida">
-          <option value="">Medida...</option>
-          <option *ngFor="let m of configService.medidas" [value]="m">{{ m }}</option>
-        </select>
-        <input type="text" placeholder="Nombre / modelo" class="input-form" style="width: 100%; box-sizing: border-box; margin-bottom: 10px" [(ngModel)]="nuevoProducto.nombre" />
-        <input type="number" placeholder="Precio" class="input-form" style="width: 100%; box-sizing: border-box; margin-bottom: 10px" [(ngModel)]="nuevoProducto.precio" />
-        <label style="font-weight: bold">Cantidad a cargar:</label>
-        <input type="number" min="1" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="cantidadIngreso" />
+        No hay ninguna {{ nombreProducto }} con ese código o nombre.<br />
+        Si es nueva, dala de alta con el botón <b>+</b>.
+        <div style="margin-top: 10px">
+          <button (click)="pasarANuevoProducto()" class="btn btn-principal" style="padding: 6px 12px">
+            + Dar de alta una {{ nombreProducto }} nueva
+          </button>
+        </div>
       </div>
     </ng-container>
 
@@ -1907,7 +1935,75 @@
 
     <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px">
       <button (click)="cerrarIngresoRapido()" class="btn" style="background: #ccc; padding: 8px 16px">Cancelar</button>
-      <button (click)="confirmarIngreso()" class="btn btn-principal" style="padding: 8px 16px">Guardar</button>
+      <button *ngIf="productoIngreso()" (click)="confirmarIngreso()" class="btn btn-principal" style="padding: 8px 16px">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ALTA DE PRODUCTO NUEVO (botón + del buscador) -->
+<div
+  *ngIf="mostrarNuevoProducto()"
+  (click)="cerrarNuevoProducto()"
+  style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000"
+>
+  <div
+    (click)="$event.stopPropagation()"
+    style="background: #fff; border-radius: 8px; padding: 25px; width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto"
+  >
+    <h3 style="margin-top: 0; color: var(--color-principal)">+ Nueva {{ nombreProducto }}</h3>
+
+    <label style="font-weight: bold; display: block; margin-bottom: 4px">Categoría</label>
+    <select
+      class="input-form custom-select"
+      style="width: 100%; margin-bottom: 12px"
+      [ngModel]="nuevoProducto.categoria"
+      (ngModelChange)="cambiarCategoriaNuevo($event)"
+    >
+      <option value="">Elegí la categoría...</option>
+      <option *ngFor="let c of configService.categorias" [value]="c.nombre">{{ c.nombre }}</option>
+    </select>
+
+    <ng-container *ngIf="pideMedida">
+      <label style="font-weight: bold; display: block; margin-bottom: 4px">Medida</label>
+      <select class="input-form custom-select" style="width: 100%; margin-bottom: 12px" [(ngModel)]="nuevoProducto.medida">
+        <option value="">Elegí la medida...</option>
+        <option *ngFor="let m of configService.medidas" [value]="m">{{ m }}</option>
+      </select>
+    </ng-container>
+
+    <label style="font-weight: bold; display: block; margin-bottom: 4px">Material</label>
+    <select class="input-form custom-select" style="width: 100%; margin-bottom: 12px" [(ngModel)]="nuevoProducto.material">
+      <option value="">Elegí el material...</option>
+      <option *ngFor="let m of configService.materiales" [value]="m">{{ m }}</option>
+    </select>
+
+    <label style="font-weight: bold; display: block; margin-bottom: 4px">Descripción</label>
+    <input
+      type="text"
+      class="input-form"
+      style="width: 100%; box-sizing: border-box; margin-bottom: 12px"
+      [(ngModel)]="nuevoProducto.nombre"
+      [placeholder]="'Descripción de la ' + nombreProducto"
+    />
+
+    <div style="display: flex; gap: 12px">
+      <div style="flex: 1">
+        <label style="font-weight: bold; display: block; margin-bottom: 4px">Precio $</label>
+        <input type="number" min="0" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="nuevoProducto.precio" />
+      </div>
+      <div style="flex: 1">
+        <label style="font-weight: bold; display: block; margin-bottom: 4px">Unidades que entran</label>
+        <input type="number" min="1" class="input-form" style="width: 100%; box-sizing: border-box" [(ngModel)]="nuevoProducto.stock_real" />
+      </div>
+    </div>
+
+    <p style="color: #6c757d; font-size: 0.85em; margin: 12px 0 0">
+      El código se genera solo. Después de guardar queda escrito en el buscador: tocá Enter para sumarla al remito.
+    </p>
+
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px">
+      <button (click)="cerrarNuevoProducto()" class="btn" style="background: #ccc; padding: 8px 16px">Cancelar</button>
+      <button (click)="guardarNuevoProducto()" class="btn btn-principal" style="padding: 8px 16px">Guardar</button>
     </div>
   </div>
 </div>

@@ -208,11 +208,13 @@ app.get("/api/productos", async (req, res) => {
 
     // Buscamos quién tiene qué cosa en remitos pendientes
     const distribuciones = await db.all(`
-      SELECT ri.producto_id, (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as cantidad, v.nombre as vendedor
+      SELECT ri.producto_id, (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as cantidad,
+             v.nombre as vendedor, r.id as remito_id
       FROM Remitos_Items ri
       JOIN Remitos r ON ri.remito_id = r.id
       JOIN Vendedores v ON r.vendedor_id = v.id
       WHERE r.estado = 'Pendiente' AND (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) > 0
+      ORDER BY v.nombre, r.id
     `);
 
     // Lo agrupamos por producto
@@ -222,6 +224,7 @@ app.get("/api/productos", async (req, res) => {
       distMap[d.producto_id].push({
         vendedor: d.vendedor,
         cantidad: d.cantidad,
+        remito_id: d.remito_id, // para saber en qué remito está, no solo quién lo tiene
       });
     }
 

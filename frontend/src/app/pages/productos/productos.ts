@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { ProductoService, Producto } from '../../services/producto.service';
 import { ConfigService } from '../../services/config.service';
 import Swal from 'sweetalert2';
-import jsPDF from 'jspdf';
 
 @Component({
   selector: 'app-productos',
@@ -290,70 +289,6 @@ export class ProductosComponent {
     });
   }
 
-  descargarListaPrecios(): void {
-    const lista = this.productos().filter((p) => p.stock_real > 0);
-    if (lista.length === 0) { Swal.fire('Lista vacía', 'No hay productos con stock mayor a cero.', 'info'); return; }
-
-    // Orden de categorías según config.json; las desconocidas van al final
-    const ordenCats = this.categorias.map((c) => c.nombre);
-    const idxCat = (cat?: string) => {
-      const i = ordenCats.indexOf(cat || '');
-      return i === -1 ? ordenCats.length : i;
-    };
-
-    lista.sort((a, b) =>
-      idxCat(a.categoria) - idxCat(b.categoria) ||
-      (a.categoria || '').localeCompare(b.categoria || '') ||
-      (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true })
-    );
-
-    const doc = new jsPDF();
-    const fecha = new Date().toLocaleDateString();
-    const negocio = this.configService.nombreNegocio;
-
-    doc.setFontSize(18);
-    doc.text(`Lista de Precios - ${negocio}`, 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Fecha: ${fecha}`, 14, 28);
-
-    let y = 40;
-    const encabezadoColumnas = () => {
-      doc.setFont('helvetica', 'bold');
-      doc.text('Código', 14, y); doc.text('Descripción', 40, y); doc.text('Material', 120, y); doc.text('Precio', 170, y);
-      doc.line(14, y + 2, 195, y + 2);
-      y += 10;
-      doc.setFont('helvetica', 'normal');
-    };
-    encabezadoColumnas();
-
-    let catActual: string | null = null;
-    lista.forEach((p) => {
-      const cat = p.categoria || 'Sin categoría';
-
-      if (cat !== catActual) {
-        if (y > 262) { doc.addPage(); y = 20; }
-        y += 4;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.text(cat, 14, y);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        y += 8;
-        catActual = cat;
-      }
-
-      if (y > 280) { doc.addPage(); y = 20; }
-      doc.text(p.codigo ? String(p.codigo) : '-', 14, y);
-      doc.text(p.nombre ? String(p.nombre).substring(0, 40) : '-', 40, y);
-      doc.text(p.material ? String(p.material) : '-', 120, y);
-      doc.text(p.precio !== undefined ? `$${p.precio.toLocaleString()}` : '-', 170, y);
-      y += 8;
-    });
-
-    doc.save(`Lista_Precios_${fecha.replace(/\//g, '-')}.pdf`);
-    Swal.fire('¡Éxito!', 'Lista de precios descargada.', 'success');
-  }
-
   async agregarMaterial() {
     const { value: nuevoMaterial } = await Swal.fire({
       title: 'Nuevo Material',
@@ -434,6 +369,51 @@ export class ProductosComponent {
         });
       }
     }
+    return;
+  }
+
+  // Solo se pueden borrar categorías que no tengan ningún producto (ni con stock 0),
+  // porque los productos guardan el nombre de la categoría.
+  async quitarCategoria() {
+    const enUso = new Set(this.productos().map((p) => p.categoria));
+    const borrables = this.categorias.filter(
+      (c) => !enUso.has(c.nombre) && c.nombre !== this.categoriaConMedida,
+    );
+
+    if (borrables.length === 0) {
+      return Swal.fire('Nada para borrar', `Todas las categorías tienen ${this.nombreProductoPlural} cargadas.`, 'info');
+    }
+
+    const opciones: Record<string, string> = {};
+    for (const c of borrables) opciones[c.nombre] = `${c.nombre} (${c.prefijo})`;
+
+    const { value: nombre } = await Swal.fire({
+      title: 'Borrar categoría',
+      text: `Solo aparecen las que no tienen ${this.nombreProductoPlural}.`,
+      input: 'select',
+      inputOptions: opciones,
+      inputPlaceholder: 'Elegí cuál',
+      showCancelButton: true,
+      confirmButtonText: 'Borrar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+      inputValidator: (v) => (v ? null : 'Elegí una categoría'),
+    });
+    if (!nombre) return;
+
+    const configActual = this.configService.config();
+    if (!configActual) return;
+    const nuevaConfig = JSON.parse(JSON.stringify(configActual));
+    nuevaConfig.inventario.categorias = nuevaConfig.inventario.categorias.filter((c: any) => c.nombre !== nombre);
+
+    this.configService.actualizarConfig(nuevaConfig).subscribe({
+      next: () => {
+        if (this.nuevoProducto.categoria === nombre) this.nuevoProducto.categoria = '';
+        if (this.filtroCategoria() === nombre) this.filtroCategoria.set('');
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `Se borró ${nombre}`, showConfirmButton: false, timer: 2000 });
+      },
+      error: () => Swal.fire('Error', 'Hubo un problema al intentar guardar.', 'error'),
+    });
     return;
   }
 

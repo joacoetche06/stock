@@ -6,13 +6,13 @@
   </p>
 
   <div class="origen">
+    <label class="opcion" [class.activa]="origen() === 'stock'">
+      <input type="radio" name="origen" [checked]="origen() === 'stock'" (change)="cambiarOrigen('stock')" />
+      Todo el stock
+    </label>
     <label class="opcion" [class.activa]="origen() === 'remito'">
       <input type="radio" name="origen" [checked]="origen() === 'remito'" (change)="cambiarOrigen('remito')" />
       Lo que lleva un remito
-    </label>
-    <label class="opcion" [class.activa]="origen() === 'stock'">
-      <input type="radio" name="origen" [checked]="origen() === 'stock'" (change)="cambiarOrigen('stock')" />
-      Todo el stock disponible
     </label>
   </div>
 
@@ -26,11 +26,10 @@
           }
         </select>
         <p class="tip">
-          Para una feria, creá una {{ nombreVendedor }} llamada por ejemplo "Feria Country" y hacele un remito con lo
-          que llevás. Al volver, liquidás ese remito como cualquier otro.
+          Sirve para mandarle a cada {{ nombreVendedor }} los precios de lo que lleva, en pocas hojas.
         </p>
       } @else {
-        <p class="tip">No hay remitos pendientes. Usá "Todo el stock disponible" o creá un remito primero.</p>
+        <p class="tip">No hay remitos pendientes. Usá "Todo el stock" o creá un remito primero.</p>
       }
     </div>
   }

@@ -20,10 +20,26 @@ export class RemitosComponent {
   remitosHistorial = signal<any[]>([]);
   filtroVendedor = signal<string>('');
 
+  // Más nuevos primero, así la página 1 siempre tiene lo último que se hizo
   remitosFiltrados = computed(() => {
     const vendedor = this.filtroVendedor();
-    if (!vendedor) return this.remitosHistorial();
-    return this.remitosHistorial().filter((r) => r.vendedor === vendedor);
+    const lista = vendedor
+      ? this.remitosHistorial().filter((r) => r.vendedor === vendedor)
+      : this.remitosHistorial();
+    return [...lista].sort((a, b) => b.id - a.id);
+  });
+
+  // --- Paginación del historial ---
+  readonly remitosPorPagina = 15;
+  paginaRemitos = signal<number>(1);
+  totalPaginasRemitos = computed(() =>
+    Math.max(1, Math.ceil(this.remitosFiltrados().length / this.remitosPorPagina)),
+  );
+  // Si la página quedó fuera de rango (por un filtro o un borrado), se acomoda sola
+  paginaRemitosActual = computed(() => Math.min(this.paginaRemitos(), this.totalPaginasRemitos()));
+  remitosPagina = computed(() => {
+    const desde = (this.paginaRemitosActual() - 1) * this.remitosPorPagina;
+    return this.remitosFiltrados().slice(desde, desde + this.remitosPorPagina);
   });
 
   vendedores = signal<Vendedor[]>([]);
@@ -66,12 +82,15 @@ export class RemitosComponent {
   historialDevoluciones = signal<any[]>([]);
   devolucionesRemito = signal<any[]>([]); // historial en el detalle del remito
 
-  // --- Ingreso rápido de mercadería ---
+  // --- Sumar stock a un producto existente ---
   mostrarIngresoRapido = signal<boolean>(false);
   busquedaIngreso = signal<string>('');
   productoIngreso = signal<any | null>(null);
   cantidadIngreso: number = 1;
-  nuevoProducto: any = { categoria: '', material: '', medida: '', nombre: '', precio: 0 };
+
+  // --- Alta de producto nuevo desde remitos (botón +) ---
+  mostrarNuevoProducto = signal<boolean>(false);
+  nuevoProducto: any = this.productoNuevoVacio();
 
   // Comisión default desde config
   comisionPorcentaje: number = 25;
@@ -142,7 +161,14 @@ export class RemitosComponent {
 
   setVendedorFiltro(nombre: string) {
     this.filtroVendedor.set(nombre);
+    this.paginaRemitos.set(1);
     this.dropdownAbierto.set('');
+  }
+
+  irAPaginaRemitos(pagina: number) {
+    const destino = Math.min(Math.max(1, pagina), this.totalPaginasRemitos());
+    this.paginaRemitos.set(destino);
+    document.getElementById('historial-remitos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   obtenerNombreVendedorSeleccionado() {
@@ -315,6 +341,11 @@ export class RemitosComponent {
   abrirDetalle(remito: any) {
     this.vistaDetalleActual.set('entrega');
     this.remitoEnDetalle.set(remito);
+    // El detalle se dibuja abajo de todo: bajamos hasta él apenas aparece
+    setTimeout(
+      () => document.getElementById('detalle-remito')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      50,
+    );
     this.devolucionesRemito.set([]);
     this.remitoService.getDevolucionesRemito(remito.id).subscribe({
       next: (devs) => this.devolucionesRemito.set(devs),
@@ -397,6 +428,15 @@ export class RemitosComponent {
     this.itemsCarrito.set([]);
   }
 
+  // Botón "Cerrar" del detalle: además de cerrarlo, vuelve a la lista
+  cerrarDetalleYVolver() {
+    this.cerrarDetalle();
+    setTimeout(
+      () => document.getElementById('historial-remitos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      50,
+    );
+  }
+
   cerrarDetalle() {
     this.remitoEnDetalle.set(null);
     this.itemsEnDetalle.set([]);
@@ -436,13 +476,13 @@ export class RemitosComponent {
     }
   }
 
-  agregarAlCarritoConCantidad(producto: any, cantidadStr: string, event: Event) {
+  agregarAlCarritoConCantidad(producto: any, cantidadStr: string, event: Event): boolean {
     event.stopPropagation(); // Evita que se cierre el menú desplegable
     const cantidadAInsertar = parseInt(cantidadStr, 10);
 
     // Validamos que no ponga letras o números negativos
     if (isNaN(cantidadAInsertar) || cantidadAInsertar < 1) {
-      return;
+      return false;
     }
 
     const items = this.itemsCarrito();
@@ -459,7 +499,7 @@ export class RemitosComponent {
         `Solo hay ${producto.stock_disponible} disponibles en total. Ya tenés ${cantidadActualEnCarrito} en el remito.`,
         'warning',
       );
-      return;
+      return false;
     }
 
     if (existe) {
@@ -492,6 +532,62 @@ export class RemitosComponent {
       showConfirmButton: false,
       timer: 1500,
     });
+    return true;
+  }
+
+  // ============================================================
+  // CARGA CON TECLADO: escribir el código + Enter suma 1 y limpia
+  // ============================================================
+
+  // "AN0148", "an148" y "148" (con Anillos elegido) son el mismo código
+  private claveCodigo(codigo: string): { letras: string; numero: string } {
+    const limpio = (codigo || '').toUpperCase().replace(/\s+/g, '');
+    const m = limpio.match(/^([A-ZÑ]*)(\d+)$/);
+    if (!m) return { letras: limpio, numero: '' };
+    return { letras: m[1], numero: String(parseInt(m[2], 10)) };
+  }
+
+  private coincideCodigo(codigo: string, termino: string): boolean {
+    const c = this.claveCodigo(codigo);
+    const t = this.claveCodigo(termino);
+    if (!t.numero) return c.letras === t.letras && !c.numero; // códigos sin número (raro)
+    if (t.letras) return c.letras === t.letras && c.numero === t.numero;
+    return c.numero === t.numero; // solo el número: lo acota la categoría elegida
+  }
+
+  agregarPorEnter(event: Event) {
+    event.preventDefault();
+    const termino = this.terminoBusqueda().trim();
+    if (!termino) return;
+
+    const categoria = this.categoriaSeleccionada();
+    const candidatos = this.productos().filter(
+      (p) => (!categoria || p.categoria === categoria) && this.coincideCodigo(p.codigo || '', termino),
+    );
+
+    const aviso = (title: string) =>
+      Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title, showConfirmButton: false, timer: 2500 });
+
+    if (candidatos.length === 0) {
+      aviso(`No hay ningún código ${termino}${categoria ? ' en ' + categoria : ''}`);
+      return;
+    }
+    if (candidatos.length > 1) {
+      const codigos = candidatos.map((p) => p.codigo).join(', ');
+      aviso(`Hay varios (${codigos}). Elegí la categoría o escribí el código completo.`);
+      return;
+    }
+
+    const producto = candidatos[0];
+    if (producto.stock_disponible <= 0) {
+      aviso(`${producto.codigo} no tiene stock disponible`);
+      return;
+    }
+
+    if (this.agregarAlCarritoConCantidad(producto, '1', event)) {
+      // Queda listo para escribir el próximo código
+      this.terminoBusqueda.set('');
+    }
   }
 
   imprimirVistaActual() {
@@ -1050,21 +1146,31 @@ export class RemitosComponent {
   }
 
   registrarPago(remito: any) {
-    const deuda = remito.total_rendir - remito.abonado;
+    // Redondeamos a centavos: la comisión puede dejar decimales (ej. 937,5)
+    const deuda = Math.round((remito.total_rendir - remito.abonado) * 100) / 100;
 
     Swal.fire({
       title: `Pago - Remito #${remito.id}`,
       html: `
       <div style="text-align: left;">
         <p><b>Vendedora:</b> ${remito.vendedor}</p>
-        <p><b>Deuda actual:</b> <span style="color: #dc3545; font-weight:bold;">$${deuda.toLocaleString()}</span></p>
+        <p><b>Deuda actual:</b> <span style="color: #dc3545; font-weight:bold;">$${deuda.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span></p>
         <hr>
         <label>Monto entregado por la vendedora:</label>
       </div>
     `,
       input: 'number',
-      inputAttributes: { min: '1', max: deuda.toString(), step: '1' },
+      // Antes era min 1 y step 1: con una deuda menor a $1 o con centavos el input
+      // quedaba inválido y no dejaba cobrar. Ahora validamos nosotros.
+      inputAttributes: { min: '0.01', max: deuda.toString(), step: 'any' },
       inputValue: deuda,
+      inputValidator: (valor) => {
+        const monto = Number(valor);
+        if (!monto || monto <= 0) return 'Ingresá un monto mayor a 0.';
+        if (monto > deuda + 0.001)
+          return `No puede ser mayor a la deuda ($${deuda.toLocaleString('es-AR', { maximumFractionDigits: 2 })}).`;
+        return null;
+      },
       showCancelButton: true,
       confirmButtonText: 'Registrar Cobro',
       confirmButtonColor: '#28a745',
@@ -1115,7 +1221,6 @@ export class RemitosComponent {
     this.busquedaIngreso.set('');
     this.productoIngreso.set(null);
     this.cantidadIngreso = 1;
-    this.nuevoProducto = { categoria: '', material: '', medida: '', nombre: '', precio: 0 };
     this.mostrarIngresoRapido.set(true);
   }
 
@@ -1133,58 +1238,118 @@ export class RemitosComponent {
     this.productoIngreso.set(null);
   }
 
+  // Si no lo encontró, la mandamos directo al alta de producto nuevo
+  pasarANuevoProducto() {
+    this.cerrarIngresoRapido();
+    this.abrirNuevoProducto();
+  }
+
   confirmarIngreso() {
+    const existente = this.productoIngreso();
+    if (!existente) return Swal.fire('Elegí un producto', 'Buscalo por código o nombre.', 'warning');
+
     const cant = Number(this.cantidadIngreso) || 0;
     if (cant < 1) return Swal.fire('Cantidad inválida', 'Ingresá al menos 1 unidad.', 'warning');
 
-    const existente = this.productoIngreso();
+    const payload = { ...existente, stock_real: existente.stock_real + cant };
+    this.productoService.editarProducto(existente.id, payload).subscribe({
+      next: () => {
+        Swal.fire(
+          'Stock actualizado',
+          `${existente.codigo}: ahora hay ${existente.stock_real + cant} unidades.`,
+          'success',
+        );
+        this.cargarDatosBase();
+        this.cerrarIngresoRapido();
+      },
+      error: (e) =>
+        Swal.fire('Error', e?.error?.error || 'No se pudo actualizar el stock.', 'error'),
+    });
+    return;
+  }
 
-    if (existente) {
-      const payload = { ...existente, stock_real: existente.stock_real + cant };
-      this.productoService.editarProducto(existente.id, payload).subscribe({
-        next: () => {
-          Swal.fire(
-            'Stock actualizado',
-            `${existente.codigo}: ahora hay ${existente.stock_real + cant} unidades.`,
-            'success',
-          );
-          this.cargarDatosBase();
-          this.cerrarIngresoRapido();
-        },
-        error: (e) =>
-          Swal.fire('Error', e?.error?.error || 'No se pudo actualizar el stock.', 'error'),
-      });
-      return;
-    }
+  // ============================================================
+  // ALTA DE PRODUCTO NUEVO (mismas reglas que Inventario)
+  // ============================================================
 
+  private productoNuevoVacio() {
+    return { categoria: '', material: '', medida: '', nombre: '', precio: null, stock_real: 1 };
+  }
+
+  get pideMedida(): boolean {
+    return (
+      this.configService.usaMedida &&
+      !!this.nuevoProducto.categoria &&
+      this.nuevoProducto.categoria === this.configService.categoriaConMedida
+    );
+  }
+
+  abrirNuevoProducto() {
+    this.nuevoProducto = this.productoNuevoVacio();
+    // Si ya estaba filtrando por una categoría, la dejamos elegida
+    const cat = this.categoriaSeleccionada();
+    if (cat && this.configService.categorias.some((c) => c.nombre === cat)) this.nuevoProducto.categoria = cat;
+    this.mostrarNuevoProducto.set(true);
+  }
+
+  cerrarNuevoProducto() {
+    this.mostrarNuevoProducto.set(false);
+  }
+
+  cambiarCategoriaNuevo(cat: string) {
+    this.nuevoProducto.categoria = cat;
+    if (!this.pideMedida) this.nuevoProducto.medida = '';
+  }
+
+  guardarNuevoProducto() {
     const np = this.nuevoProducto;
-    if (!np.nombre || !np.categoria) {
-      return Swal.fire('Faltan datos', 'Completá al menos categoría y nombre.', 'warning');
-    }
+    const color = this.configService.config()?.negocio.colorPrincipal;
+    const falta = (title: string, text: string) =>
+      Swal.fire({ icon: 'warning', title, text, confirmButtonColor: color });
+
+    if (!np.categoria) return falta('Falta la categoría', `Elegí qué tipo de ${this.nombreProducto} es.`);
+    if (this.pideMedida && !np.medida)
+      return falta('Falta la medida', `Como elegiste "${np.categoria}", elegí la medida.`);
+    if (!np.material) return falta('Falta el material', 'Elegí el material.');
+    if (np.precio == null || np.precio === '' || Number(np.precio) < 0)
+      return falta('Falta el precio', 'Ingresá un precio válido.');
+    const cant = Number(np.stock_real);
+    if (!cant || cant < 1) return falta('Falta la cantidad', 'Ingresá cuántas unidades entran.');
 
     this.productoService
       .crearProducto({
         categoria: np.categoria,
         material: np.material,
-        medida: np.medida,
-        nombre: np.nombre,
-        precio: Number(np.precio) || 0,
+        medida: this.pideMedida ? np.medida : '',
+        nombre: (np.nombre || '').trim(),
+        precio: Number(np.precio),
         stock_real: cant,
         stock_disponible: cant,
       })
       .subscribe({
         next: (r: any) => {
-          Swal.fire(
-            'Producto creado',
-            `Se dio de alta como <b>${r?.codigo || 'nuevo código'}</b> con ${cant} unidades.`,
-            'success',
-          );
-          this.cargarDatosBase();
-          this.cerrarIngresoRapido();
+          const codigo = r?.codigo || '';
+          this.cerrarNuevoProducto();
+          // Recargamos y dejamos el código escrito en el buscador:
+          // con Enter se suma al remito que está armando.
+          this.productoService.getProductos().subscribe((p) => {
+            this.productos.set(p);
+            this.categoriaSeleccionada.set(np.categoria);
+            this.terminoBusqueda.set(codigo);
+            this.mostrarDropdown.set(true);
+            setTimeout(() => document.getElementById('busqueda-remito')?.focus(), 50);
+          });
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `Se creó ${codigo} con ${cant} u. Enter para sumarlo al remito.`,
+            showConfirmButton: false,
+            timer: 3000,
+          });
         },
-        error: (e) =>
-          Swal.fire('Error', e?.error?.error || 'No se pudo crear el producto.', 'error'),
+        error: (e) => Swal.fire('Error', e?.error?.error || 'No se pudo crear el producto.', 'error'),
       });
-      return;
+    return;
   }
 }
