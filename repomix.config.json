@@ -32,7 +32,9 @@
       "**/*.pdf",
       "**/*.xlsx",
       "diferencias.txt",
-      "resumen_archivos.txt"
+      "resumen_archivos.txt",
+      "*.patch"
+
     ]
   },
   "security": { "enableSecurityCheck": true }

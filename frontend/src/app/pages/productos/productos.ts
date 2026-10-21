@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ProductoService, Producto } from '../../services/producto.service';
 import { ConfigService } from '../../services/config.service';
 import Swal from 'sweetalert2';
+import { rangoBusqueda } from '../../utils/busqueda';
 
 @Component({
   selector: 'app-productos',
@@ -62,18 +63,21 @@ export class ProductosComponent {
     const col = this.columnaOrden();
     const asc = this.ordenAscendente() ? 1 : -1;
 
+    // Con texto buscado, lo que coincide por código va primero ("AR" → los AR antes que un AN "ÁRBOL...")
+    const rango = new Map<any, number>();
     let filtrados = this.productos().filter((p) => {
       if (categoria && p.categoria !== categoria) return false;
       if (material && p.material !== material) return false;
       if (texto) {
-        const nombreMatch = p.nombre.toLowerCase().includes(texto);
-        const codigoMatch = (p.codigo || '').toLowerCase().includes(texto);
-        if (!nombreMatch && !codigoMatch) return false;
+        const r = rangoBusqueda(texto, p.codigo, [p.nombre]);
+        if (r === Infinity) return false;
+        rango.set(p, r);
       }
       return true;
     });
 
     return filtrados.sort((a: any, b: any) => {
+      if (texto && rango.get(a) !== rango.get(b)) return rango.get(a)! - rango.get(b)!;
       if (a.stock_disponible <= 0 && b.stock_disponible > 0) return 1;
       if (b.stock_disponible <= 0 && a.stock_disponible > 0) return -1;
       let valA = a[col] || '';
