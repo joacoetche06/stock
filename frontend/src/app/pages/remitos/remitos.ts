@@ -8,6 +8,7 @@ import { ConfigService } from '../../services/config.service';
 import Swal from 'sweetalert2';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { filtrarPorRelevancia } from '../../utils/busqueda';
 
 @Component({
   selector: 'app-remitos',
@@ -188,54 +189,36 @@ export class RemitosComponent {
   }
 
   productosDisponibles = computed(() => {
-    const busqueda = this.terminoBusqueda().toLowerCase();
-    const categoria = this.categoriaSeleccionada(); // Agregamos esto
+    const busqueda = this.terminoBusqueda();
+    const categoria = this.categoriaSeleccionada();
 
     const filtrados = this.productos().filter((p) => {
       if (p.stock_disponible <= 0) return false;
-
-      // NUEVO: Si hay una categoría seleccionada y no coincide, lo descartamos
       if (categoria && p.categoria !== categoria) return false;
-
-      // Lógica de búsqueda original
-      if (!busqueda) return true;
-      return (
-        (p.codigo?.toLowerCase() || '').includes(busqueda) ||
-        (p.nombre?.toLowerCase() || '').includes(busqueda) ||
-        (p.categoria?.toLowerCase() || '').includes(busqueda) ||
-        (p.material?.toLowerCase() || '').includes(busqueda)
-      );
+      return true;
     });
 
     // ORDENAMIENTO ALFANUMÉRICO INTELIGENTE (AN01 antes que AN10)
-    return filtrados.sort((a, b) => {
+    filtrados.sort((a, b) => {
       const codA = a.codigo || '';
       const codB = b.codigo || '';
       return codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
     });
+
+    // Primero lo que coincide por código, después por descripción/categoría/material
+    return filtrarPorRelevancia(filtrados, busqueda, (p) => p.codigo, (p) => [p.nombre, p.categoria, p.material]);
   });
 
   // Códigos en calle de los remitos seleccionados, filtrados por la búsqueda
-  gruposFiltradosDevolucion = computed(() => {
-    const b = this.busquedaDevolucion().toLowerCase().trim();
-    const grupos = this.gruposLiquidacion();
-    if (!b) return grupos;
-    return grupos.filter(
-      (g) =>
-        (g.codigo || '').toLowerCase().includes(b) || (g.nombre || '').toLowerCase().includes(b),
-    );
-  });
+  // (primero los que coinciden por código: "AR" muestra los AR antes que un AN "ÁRBOL...")
+  gruposFiltradosDevolucion = computed(() =>
+    filtrarPorRelevancia(this.gruposLiquidacion(), this.busquedaDevolucion(), (g) => g.codigo, (g) => [g.nombre]),
+  );
 
   // Códigos que la vendedora tiene en calle (todos sus remitos pendientes), filtrados
-  codigosFiltradosDevParcial = computed(() => {
-    const b = this.busquedaDevParcial().toLowerCase().trim();
-    const codigos = this.codigosEnCalle();
-    if (!b) return codigos;
-    return codigos.filter(
-      (c) =>
-        (c.codigo || '').toLowerCase().includes(b) || (c.nombre || '').toLowerCase().includes(b),
-    );
-  });
+  codigosFiltradosDevParcial = computed(() =>
+    filtrarPorRelevancia(this.codigosEnCalle(), this.busquedaDevParcial(), (c) => c.codigo, (c) => [c.nombre]),
+  );
 
   // Resumen por producto para el detalle: entregado / devuelto parcial / queda
   resumenDevolucionesRemito = computed(() => {
@@ -255,20 +238,15 @@ export class RemitosComponent {
   });
 
   resultadosIngreso = computed(() => {
-    const b = this.busquedaIngreso().toLowerCase().trim();
+    const b = this.busquedaIngreso().trim();
     if (!b) return [];
-    return this.productos()
-      .filter(
-        (p) =>
-          (p.codigo || '').toLowerCase().includes(b) || (p.nombre || '').toLowerCase().includes(b),
-      )
-      .sort((a, c) =>
-        (a.codigo || '').localeCompare(c.codigo || '', undefined, {
-          numeric: true,
-          sensitivity: 'base',
-        }),
-      )
-      .slice(0, 8);
+    const ordenados = [...this.productos()].sort((a, c) =>
+      (a.codigo || '').localeCompare(c.codigo || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      }),
+    );
+    return filtrarPorRelevancia(ordenados, b, (p) => p.codigo, (p) => [p.nombre]).slice(0, 8);
   });
 
   cargarDatosBase() {
