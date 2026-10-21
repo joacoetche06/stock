@@ -83,6 +83,15 @@ export class RemitosComponent {
   historialDevoluciones = signal<any[]>([]);
   devolucionesRemito = signal<any[]>([]); // historial en el detalle del remito
 
+  // --- Cuenta corriente por vendedora ---
+  cuentaVendedor = signal<{ id: number; nombre: string } | null>(null);
+  cuentaDatos = signal<any | null>(null);
+  montoPagoCuenta: number | null = null;
+  observacionPagoCuenta: string = '';
+  pagosCuentaActivos = computed(() =>
+    (this.cuentaDatos()?.pagos || []).filter((p: any) => p.estado === 'Activa'),
+  );
+
   // --- Sumar stock a un producto existente ---
   mostrarIngresoRapido = signal<boolean>(false);
   busquedaIngreso = signal<string>('');
@@ -1123,9 +1132,16 @@ export class RemitosComponent {
     });
   }
 
+  // Lo que debe un remito cerrado. Los de cuenta corriente salen del reparto de pagos a cuenta;
+  // los liquidados antes de la cuenta corriente siguen con total - abonado (botón Cobrar).
+  deudaRemito(r: any): number {
+    if (r.en_cuenta) return r.pendiente || 0;
+    return Math.round(((r.total_rendir || 0) - (r.abonado || 0)) * 100) / 100;
+  }
+
   registrarPago(remito: any) {
-    // Redondeamos a centavos: la comisión puede dejar decimales (ej. 937,5)
-    const deuda = Math.round((remito.total_rendir - remito.abonado) * 100) / 100;
+    // Redondeado a centavos: la comisión puede dejar decimales (ej. 937,5)
+    const deuda = this.deudaRemito(remito);
 
     Swal.fire({
       title: `Pago - Remito #${remito.id}`,
@@ -1169,6 +1185,7 @@ export class RemitosComponent {
 
   async reabrirRemito(remito: any) {
     const cobrado = remito.abonado || 0;
+    const cubiertoCuenta = remito.en_cuenta ? (remito.cubierto || 0) - cobrado : 0;
     const result = await Swal.fire({
       title: `¿Reabrir el remito #${remito.id}?`,
       html:
@@ -1176,6 +1193,9 @@ export class RemitosComponent {
         `El stock se reajusta como estaba antes de cerrarlo.` +
         (cobrado > 0
           ? `<br><br><b>Ojo:</b> este remito ya tiene $${cobrado.toLocaleString('es-AR')} cobrados. Los pagos se conservan.`
+          : '') +
+        (cubiertoCuenta > 0
+          ? `<br><br><b>Cuenta corriente:</b> los $${cubiertoCuenta.toLocaleString('es-AR')} que cubrían este remito vuelven a la cuenta de ${remito.vendedor} y se aplican a sus otros remitos (o quedan a favor).`
           : ''),
       icon: 'warning',
       showCancelButton: true,
@@ -1195,6 +1215,146 @@ export class RemitosComponent {
         Swal.fire('Error', e?.error?.error || 'No se pudo reabrir el remito.', 'error'),
     });
   }
+  // ============================================================
+  // CUENTA CORRIENTE POR VENDEDORA
+  // ============================================================
+
+  abrirCuentaVendedor() {
+    const nombre = this.filtroVendedor();
+    const vend = this.vendedores().find((v) => v.nombre === nombre);
+    if (!vend) {
+      Swal.fire('Elegí una vendedora', 'Seleccioná una en el filtro de arriba.', 'warning');
+      return;
+    }
+    // El detalle tiene su propia zona de impresión: lo cerramos para que no se mezcle en el PDF
+    this.cerrarDetalle();
+    this.montoPagoCuenta = null;
+    this.observacionPagoCuenta = '';
+    this.cuentaDatos.set(null);
+    this.cuentaVendedor.set({ id: vend.id!, nombre: vend.nombre });
+    this.cargarCuenta(vend.id!);
+  }
+
+  cargarCuenta(vendedorId: number) {
+    this.remitoService.getCuentaVendedor(vendedorId).subscribe({
+      next: (c) => this.cuentaDatos.set(c),
+      error: () => Swal.fire('Error', 'No se pudo cargar la cuenta corriente.', 'error'),
+    });
+  }
+
+  cerrarCuentaVendedor() {
+    this.cuentaVendedor.set(null);
+    this.cuentaDatos.set(null);
+    this.montoPagoCuenta = null;
+    this.observacionPagoCuenta = '';
+  }
+
+  formatoPesos(n: number): string {
+    return '$ ' + (Number(n) || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  }
+
+  // "Debe $ X" / "A favor $ X" / "Al día"
+  textoSaldo(saldo: number): string {
+    if (saldo > 0) return `Debe ${this.formatoPesos(saldo)}`;
+    if (saldo < 0) return `A favor ${this.formatoPesos(-saldo)}`;
+    return 'Al día';
+  }
+
+  async registrarPagoCuenta() {
+    const v = this.cuentaVendedor();
+    if (!v) return;
+    const monto = Math.round((Number(this.montoPagoCuenta) || 0) * 100) / 100;
+    if (monto <= 0) {
+      Swal.fire('Monto inválido', 'Ingresá cuánto entregó la vendedora.', 'warning');
+      return;
+    }
+    const saldoAntes = this.cuentaDatos()?.saldo || 0;
+    const saldoDespues = Math.round((saldoAntes - monto) * 100) / 100;
+
+    const result = await Swal.fire({
+      title: '¿Registrar el pago?',
+      html:
+        `Pago a cuenta de <b>${v.nombre}</b>: <b>${this.formatoPesos(monto)}</b><br>` +
+        `Se aplica del remito liquidado más viejo al más nuevo.<br><br>` +
+        `Saldo: ${this.textoSaldo(saldoAntes)} → <b>${this.textoSaldo(saldoDespues)}</b>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, registrar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#28a745',
+    });
+    if (!result.isConfirmed) return;
+
+    this.remitoService
+      .registrarPagoCuenta(v.id, { monto, observacion: this.observacionPagoCuenta.trim() })
+      .subscribe({
+        next: () => {
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `Pago de ${this.formatoPesos(monto)} registrado`,
+            showConfirmButton: false,
+            timer: 1800,
+          });
+          this.montoPagoCuenta = null;
+          this.observacionPagoCuenta = '';
+          this.cargarCuenta(v.id);
+          this.cargarHistorialRemitos();
+        },
+        error: (e) => Swal.fire('Error', e?.error?.error || 'No se pudo registrar el pago.', 'error'),
+      });
+  }
+
+  async anularPagoCuenta(pago: any) {
+    const v = this.cuentaVendedor();
+    const result = await Swal.fire({
+      title: `¿Anular el pago de ${this.formatoPesos(pago.monto)}?`,
+      html:
+        `Del ${new Date(pago.fecha).toLocaleDateString('es-AR')}. La cuenta se recalcula sin este pago.<br>` +
+        `Queda en el historial como anulado.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, anular',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+    });
+    if (!result.isConfirmed) return;
+
+    this.remitoService.anularPagoCuenta(pago.id).subscribe({
+      next: () => {
+        Swal.fire('Anulado', 'El pago fue anulado y la cuenta recalculada.', 'success');
+        if (v) this.cargarCuenta(v.id);
+        this.cargarHistorialRemitos();
+      },
+      error: (e) => Swal.fire('No se pudo anular', e?.error?.error || 'Error al anular el pago.', 'error'),
+    });
+  }
+
+  guardarPdfCuenta() {
+    const d = this.cuentaDatos();
+    if (!d) return;
+    const hoy = new Date();
+    const fecha = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    const nombre = `Cuenta_${d.vendedor.nombre}_${fecha}`
+      .replace(/[\\/:*?"<>|]+/g, '')
+      .replace(/\s+/g, '_');
+
+    // Con esta clase el @media print deja SOLO el resumen (ver styles.css)
+    document.body.classList.add('imprimiendo-cuenta');
+    const limpiar = () => document.body.classList.remove('imprimiendo-cuenta');
+    this.remitoService.guardarPdf(nombre).subscribe({
+      next: (ok) => {
+        limpiar();
+        if (ok) Swal.fire('¡Éxito!', 'El PDF se guardó correctamente.', 'success');
+      },
+      error: () => {
+        limpiar();
+        Swal.fire('Error', 'No se pudo generar el PDF.', 'error');
+      },
+    });
+  }
+
   abrirIngresoRapido() {
     this.busquedaIngreso.set('');
     this.productoIngreso.set(null);

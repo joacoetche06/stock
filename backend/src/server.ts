@@ -151,6 +151,12 @@ async function inicializarDB() {
       `ALTER TABLE Remitos_Items ADD COLUMN precio REAL DEFAULT 0;`, // <-- NUEVA
       `ALTER TABLE Remitos ADD COLUMN total_rendir REAL DEFAULT 0;`, // <-- NUEVA
       `ALTER TABLE Remitos ADD COLUMN abonado REAL DEFAULT 0;`, // <-- NUEVA
+      // Cuenta corriente por vendedora
+      `ALTER TABLE Remitos ADD COLUMN fecha_liquidacion TEXT;`, // NULL = liquidado antes de la cuenta corriente (o pendiente)
+      `ALTER TABLE Pagos ADD COLUMN vendedor_id INTEGER;`,
+      `ALTER TABLE Pagos ADD COLUMN estado TEXT DEFAULT 'Activa';`,
+      `ALTER TABLE Pagos ADD COLUMN fecha_anulacion TEXT;`,
+      `ALTER TABLE Pagos ADD COLUMN observacion TEXT;`,
     ];
     for (const m of migraciones) {
       try {
@@ -197,6 +203,115 @@ app.get("/api/status", (req, res) => {
     negocio: CONFIG.negocio?.nombre,
   });
 });
+
+// ============================================================
+// CUENTA CORRIENTE POR VENDEDORA
+// ============================================================
+// Entran solo los remitos liquidados desde que existe la cuenta corriente
+// (fecha_liquidacion NOT NULL). Los pagos a cuenta (remito_id NULL) no se
+// guardan aplicados: se reparten al vuelo del remito liquidado primero al
+// último, así reabrir / anular / liquidar se reacomoda solo.
+// Todo se calcula en centavos enteros para no arrastrar decimales de la comisión.
+
+const aCentavos = (n: any) => Math.round((Number(n) || 0) * 100);
+const aPesos = (c: number) => c / 100;
+
+interface RemitoCuenta {
+  id: number;
+  vendedor_id: number;
+  fecha_salida: string;
+  fecha_liquidacion: string;
+  comision: number;
+  total: number; // total a rendir
+  pagado_directo: number; // pagos cargados al remito (caso raro: remito viejo reabierto y vuelto a liquidar)
+  aplicado: number; // lo que cubren los pagos a cuenta
+  cubierto: number; // directo + aplicado (tope: total)
+  pendiente: number; // lo que falta
+}
+
+interface Cuenta {
+  remitos: RemitoCuenta[];
+  total_liquidado: number;
+  total_pagos_cuenta: number;
+  total_pagado_directo: number;
+  saldo: number; // > 0 debe, < 0 a favor
+}
+
+async function calcularCuentas(vendedorId?: number): Promise<Map<number, Cuenta>> {
+  const filtroR = vendedorId ? "AND r.vendedor_id = ?" : "";
+  const filtroP = vendedorId ? "AND vendedor_id = ?" : "";
+  const params = vendedorId ? [vendedorId] : [];
+
+  const remitos = await db.all(
+    `SELECT r.id, r.vendedor_id, r.fecha_salida, r.fecha_liquidacion, r.comision, r.total_rendir,
+            (SELECT COALESCE(SUM(p.monto), 0) FROM Pagos p
+              WHERE p.remito_id = r.id AND COALESCE(p.estado, 'Activa') = 'Activa') as pagado_directo
+     FROM Remitos r
+     WHERE r.estado = 'Cerrado' AND r.fecha_liquidacion IS NOT NULL ${filtroR}
+     ORDER BY r.fecha_liquidacion ASC, r.id ASC`,
+    params,
+  );
+  const pagos = await db.all(
+    `SELECT vendedor_id, COALESCE(SUM(monto), 0) as total
+     FROM Pagos
+     WHERE remito_id IS NULL AND vendedor_id IS NOT NULL AND COALESCE(estado, 'Activa') = 'Activa' ${filtroP}
+     GROUP BY vendedor_id`,
+    params,
+  );
+
+  const ids = new Set<number>([
+    ...remitos.map((r: any) => r.vendedor_id),
+    ...pagos.map((p: any) => p.vendedor_id),
+  ]);
+  if (vendedorId) ids.add(vendedorId);
+
+  const cuentas = new Map<number, Cuenta>();
+  for (const vid of ids) {
+    const propios = remitos.filter((r: any) => r.vendedor_id === vid);
+    const pagosCuenta = aCentavos(pagos.find((p: any) => p.vendedor_id === vid)?.total);
+
+    // Si algún remito tiene más pago directo que total, el excedente también es plata a favor
+    let bolsa = pagosCuenta;
+    for (const r of propios) bolsa += Math.max(0, aCentavos(r.pagado_directo) - aCentavos(r.total_rendir));
+
+    let liquidado = 0;
+    let directo = 0;
+    let pendienteTotal = 0;
+    const lista: RemitoCuenta[] = [];
+    for (const r of propios) {
+      const total = aCentavos(r.total_rendir);
+      const dir = aCentavos(r.pagado_directo);
+      const aCubrir = Math.max(0, total - dir);
+      const aplicado = Math.min(bolsa, aCubrir);
+      bolsa -= aplicado;
+      const pendiente = aCubrir - aplicado;
+      liquidado += total;
+      directo += dir;
+      pendienteTotal += pendiente;
+      lista.push({
+        id: r.id,
+        vendedor_id: r.vendedor_id,
+        fecha_salida: r.fecha_salida,
+        fecha_liquidacion: r.fecha_liquidacion,
+        comision: r.comision,
+        total: aPesos(total),
+        pagado_directo: aPesos(dir),
+        aplicado: aPesos(aplicado),
+        cubierto: aPesos(total - pendiente),
+        pendiente: aPesos(pendiente),
+      });
+    }
+
+    cuentas.set(vid, {
+      remitos: lista,
+      total_liquidado: aPesos(liquidado),
+      total_pagos_cuenta: aPesos(pagosCuenta),
+      total_pagado_directo: aPesos(directo),
+      saldo: aPesos(pendienteTotal - bolsa), // lo que sobra en la bolsa es saldo a favor
+    });
+  }
+  return cuentas;
+}
 
 // ============================================================
 // RUTAS DE PRODUCTOS
@@ -582,6 +697,7 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
   try {
     await db.run("BEGIN TRANSACTION");
     let totalRendirGlobal = 0;
+    const fechaLiquidacion = new Date().toISOString(); // misma para todo el lote; desempata el id
 
     for (const remito of remitos) {
       const cab = await db.get(
@@ -606,10 +722,10 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
       const totalRendirRemito = await cerrarItemsRemito(remito.remito_id, devMap, comision || 0);
 
       await db.run(
-        `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
+        `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, fecha_liquidacion=?,
          abonado=(SELECT COALESCE(SUM(monto),0) FROM Pagos WHERE remito_id=Remitos.id)
          WHERE id=?`,
-        [comision || 0, totalRendirRemito, remito.remito_id],
+        [comision || 0, totalRendirRemito, fechaLiquidacion, remito.remito_id],
       );
       totalRendirGlobal += totalRendirRemito;
     }
@@ -625,6 +741,100 @@ app.post("/api/vendedores/:id/liquidar", async (req, res) => {
     res
       .status(500)
       .json({ error: error.message || "Error al liquidar la vendedora." });
+  }
+});
+
+// ============================================================
+// CUENTA CORRIENTE: resumen, pagos a cuenta y anulación
+// ============================================================
+
+app.get("/api/vendedores/:id/cuenta", async (req, res) => {
+  const vendedorId = Number(req.params.id);
+  try {
+    const vend = await db.get(`SELECT id, nombre, telefono FROM Vendedores WHERE id = ?`, [vendedorId]);
+    if (!vend) return res.status(404).json({ error: "Vendedora no encontrada." });
+
+    const cuenta = (await calcularCuentas(vendedorId)).get(vendedorId)!;
+    const pagos = await db.all(
+      `SELECT id, monto, fecha, observacion, COALESCE(estado, 'Activa') as estado, fecha_anulacion
+       FROM Pagos WHERE vendedor_id = ? AND remito_id IS NULL
+       ORDER BY fecha DESC, id DESC`,
+      [vendedorId],
+    );
+    // Remitos liquidados antes de la cuenta corriente que todavía deben (se cobran con "Cobrar")
+    const anteriores = await db.all(
+      `SELECT r.id, r.fecha_salida, r.total_rendir,
+              (SELECT COALESCE(SUM(p.monto), 0) FROM Pagos p WHERE p.remito_id = r.id) as abonado
+       FROM Remitos r
+       WHERE r.vendedor_id = ? AND r.estado = 'Cerrado' AND r.fecha_liquidacion IS NULL
+       ORDER BY r.id ASC`,
+      [vendedorId],
+    );
+    const deudaAnterior = anteriores
+      .map((r: any) => ({ id: r.id, fecha_salida: r.fecha_salida, debe: aPesos(aCentavos(r.total_rendir) - aCentavos(r.abonado)) }))
+      .filter((r: any) => r.debe > 0);
+    const sinLiquidar = await db.all(
+      `SELECT id, fecha_salida FROM Remitos WHERE vendedor_id = ? AND estado = 'Pendiente' ORDER BY id ASC`,
+      [vendedorId],
+    );
+
+    res.json({
+      vendedor: vend,
+      ...cuenta,
+      pagos,
+      deuda_anterior: deudaAnterior,
+      sin_liquidar: sinLiquidar,
+      generado: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener la cuenta corriente." });
+  }
+});
+
+app.post("/api/vendedores/:id/pagos", async (req, res) => {
+  const vendedorId = Number(req.params.id);
+  const monto = aPesos(aCentavos(req.body?.monto));
+  const observacion = String(req.body?.observacion || "").trim();
+  if (!Number.isFinite(monto) || monto <= 0) return res.status(400).json({ error: "Monto inválido." });
+
+  try {
+    const vend = await db.get(`SELECT id FROM Vendedores WHERE id = ?`, [vendedorId]);
+    if (!vend) return res.status(404).json({ error: "Vendedora no encontrada." });
+
+    const result = await db.run(
+      `INSERT INTO Pagos (remito_id, vendedor_id, monto, fecha, estado, observacion) VALUES (NULL, ?, ?, ?, 'Activa', ?)`,
+      [vendedorId, monto, new Date().toISOString(), observacion],
+    );
+    const cuenta = (await calcularCuentas(vendedorId)).get(vendedorId)!;
+    res.status(201).json({ mensaje: "Pago registrado.", id: result.lastID, saldo: cuenta.saldo });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al registrar el pago." });
+  }
+});
+
+app.put("/api/pagos/:id/anular", async (req, res) => {
+  try {
+    const pago = await db.get(
+      `SELECT id, remito_id, vendedor_id, COALESCE(estado, 'Activa') as estado FROM Pagos WHERE id = ?`,
+      [req.params.id],
+    );
+    if (!pago) return res.status(404).json({ error: "Pago no encontrado." });
+    if (pago.remito_id !== null || pago.vendedor_id === null) {
+      return res.status(400).json({ error: "Solo se pueden anular pagos de cuenta corriente." });
+    }
+    if (pago.estado !== "Activa") return res.status(400).json({ error: "El pago ya está anulado." });
+
+    await db.run(`UPDATE Pagos SET estado = 'Anulada', fecha_anulacion = ? WHERE id = ?`, [
+      new Date().toISOString(),
+      pago.id,
+    ]);
+    const cuenta = (await calcularCuentas(pago.vendedor_id)).get(pago.vendedor_id)!;
+    res.json({ mensaje: "Pago anulado.", saldo: cuenta.saldo });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al anular el pago." });
   }
 });
 
@@ -863,11 +1073,23 @@ app.post("/api/remitos", async (req, res) => {
 app.get("/api/remitos", async (req, res) => {
   try {
     const remitos = await db.all(`
-      SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, r.total_rendir, r.abonado, v.nombre as vendedor
+      SELECT r.id, r.fecha_salida, r.estado, r.vendedor_id, r.comision, r.total_rendir, r.abonado,
+             r.fecha_liquidacion, v.nombre as vendedor
       FROM Remitos r
       JOIN Vendedores v ON r.vendedor_id = v.id
     `);
-    res.json(remitos);
+    // Remitos de cuenta corriente: lo cubierto/pendiente sale del reparto de pagos a cuenta
+    const cuentas = await calcularCuentas();
+    const porRemito = new Map<number, RemitoCuenta>();
+    for (const c of cuentas.values()) for (const rc of c.remitos) porRemito.set(rc.id, rc);
+    res.json(
+      remitos.map((r: any) => {
+        const rc = porRemito.get(r.id);
+        return rc
+          ? { ...r, en_cuenta: true, cubierto: rc.cubierto, pendiente: rc.pendiente }
+          : { ...r, en_cuenta: false };
+      }),
+    );
   } catch (error) {
     res.status(500).json({ error: "Error al obtener los remitos" });
   }
@@ -903,10 +1125,10 @@ app.put("/api/remitos/:id/cerrar", async (req, res) => {
     await db.run("BEGIN TRANSACTION");
     const total = await cerrarItemsRemito(remitoId, devMap, comision || 0);
     await db.run(
-      `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?,
+      `UPDATE Remitos SET estado='Cerrado', comision=?, total_rendir=?, fecha_liquidacion=?,
        abonado=(SELECT COALESCE(SUM(monto),0) FROM Pagos WHERE remito_id=Remitos.id)
        WHERE id=?`,
-      [comision || 0, total, remitoId],
+      [comision || 0, total, new Date().toISOString(), remitoId],
     );
     await db.run("COMMIT");
     res.json({ mensaje: "Remito cerrado y stock actualizado correctamente", total_rendir: total });
@@ -924,6 +1146,14 @@ app.put("/api/remitos/:id/pagar", async (req, res) => {
 
   if (!monto || monto <= 0)
     return res.status(400).json({ error: "Monto inválido" });
+
+  const cab = await db.get(`SELECT estado, fecha_liquidacion FROM Remitos WHERE id = ?`, [remitoId]);
+  if (!cab) return res.status(404).json({ error: "Remito no encontrado." });
+  if (cab.fecha_liquidacion) {
+    return res.status(400).json({
+      error: "Este remito se paga por la cuenta corriente de la vendedora. Registrá el pago desde 'Cuenta de...'.",
+    });
+  }
 
   try {
     await db.run("BEGIN TRANSACTION");
@@ -988,9 +1218,10 @@ app.put("/api/remitos/:id/reabrir", async (req, res) => {
       );
     }
 
-    // Los pagos NO se borran: quedan en la tabla Pagos y se recuperan al volver a cerrar
+    // Los pagos NO se borran: quedan en la tabla Pagos y se recuperan al volver a cerrar.
+    // Si era de cuenta corriente, lo que tenía aplicado vuelve a la bolsa (se recalcula solo).
     await db.run(
-      `UPDATE Remitos SET estado='Pendiente', comision=0, total_rendir=0 WHERE id=?`,
+      `UPDATE Remitos SET estado='Pendiente', comision=0, total_rendir=0, fecha_liquidacion=NULL WHERE id=?`,
       [remitoId],
     );
 

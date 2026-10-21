@@ -115,4 +115,29 @@ export class RemitoService {
   getDevolucionesRemito(remitoId: number): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}/${remitoId}/devoluciones`);
   }
+
+  // --- Cuenta corriente por vendedora ---
+  getCuentaVendedor(vendedorId: number): Observable<any> {
+    return this.http.get<any>(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/cuenta`);
+  }
+
+  registrarPagoCuenta(
+    vendedorId: number,
+    payload: { monto: number; observacion?: string },
+  ): Observable<any> {
+    return this.http.post(`http://127.0.0.1:3001/api/vendedores/${vendedorId}/pagos`, payload);
+  }
+
+  anularPagoCuenta(pagoId: number): Observable<any> {
+    return this.http.put(`http://127.0.0.1:3001/api/pagos/${pagoId}/anular`, {});
+  }
+
+  // PDF nativo con nombre de archivo libre (en Chrome cae a window.print)
+  guardarPdf(nombreArchivo: string): Observable<any> {
+    if (this.electron) {
+      return from(this.electron.ipcRenderer.invoke('generar-pdf-nativo', { nombreArchivo }));
+    }
+    window.print();
+    return from([true]);
+  }
 }

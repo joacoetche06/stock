@@ -397,3 +397,113 @@ select.input-form:-moz-focusring {
     color: var(--color-texto) !important; /* FORZAMOS LETRA AZULADA */
   }
 }
+
+/* =========================================
+   CUENTA CORRIENTE POR VENDEDORA (modal en Remitos)
+   ========================================= */
+.cuenta-saldo {
+  border: 2px solid;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.cuenta-aviso {
+  background: #fff3cd;
+  border: 1px solid #ffe08a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 15px;
+}
+
+.cuenta-pago {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+}
+
+/* =========================================
+   RESUMEN DE CUENTA CORRIENTE (PDF)
+   La zona no se ve en pantalla. Al guardar el PDF se pone la clase
+   .imprimiendo-cuenta en el body y se imprime SOLO el resumen
+   (sin las hojas en blanco que dejaría el resto de la pantalla).
+   ========================================= */
+@media screen {
+  #resumen-cuenta {
+    display: none;
+  }
+}
+
+@media print {
+  body.imprimiendo-cuenta * {
+    display: none !important;
+  }
+  body.imprimiendo-cuenta :has(#resumen-cuenta),
+  body.imprimiendo-cuenta #resumen-cuenta,
+  body.imprimiendo-cuenta #resumen-cuenta * {
+    display: revert !important;
+    visibility: visible !important;
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  #resumen-cuenta {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    color: #000;
+  }
+  #resumen-cuenta .rc-datos {
+    margin: 18px 0 10px;
+    padding-bottom: 10px;
+    border-bottom: 2px dashed #000;
+    line-height: 1.6;
+  }
+  #resumen-cuenta .rc-saldo {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 14px 0 18px;
+  }
+  #resumen-cuenta .rc-titulo {
+    font-size: 18px;
+    margin: 18px 0 6px;
+    color: var(--color-texto);
+  }
+  #resumen-cuenta .rc-tabla,
+  #resumen-cuenta .rc-totales {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #resumen-cuenta .rc-tabla th {
+    border-bottom: 2px solid var(--color-principal);
+    color: var(--color-texto);
+    padding: 6px 8px;
+  }
+  #resumen-cuenta .rc-tabla td {
+    border-bottom: 1px solid #ddd;
+    padding: 6px 8px;
+  }
+  #resumen-cuenta .rc-totales {
+    margin-top: 24px;
+    border-top: 2px solid #000;
+    font-size: 18px;
+  }
+  #resumen-cuenta .rc-totales td {
+    padding: 6px 8px;
+  }
+  #resumen-cuenta .rc-total-final td {
+    font-size: 22px;
+    font-weight: bold;
+  }
+}
+
