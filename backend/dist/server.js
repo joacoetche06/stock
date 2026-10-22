@@ -505,7 +505,7 @@ app.delete("/api/vendedores/:id", async (req, res) => {
 app.get("/api/vendedores/:id/pendientes", async (req, res) => {
     try {
         const filas = await db.all(`SELECT r.id as remito_id, r.fecha_salida,
-              ri.producto_id, p.codigo, p.nombre,
+              ri.producto_id, p.codigo, p.nombre, p.categoria,
               CASE WHEN ri.precio > 0 THEN ri.precio ELSE p.precio END as precio,
               (ri.cantidad_entregada - ri.cantidad_vendida - ri.cantidad_devuelta) as pendiente
        FROM Remitos r
@@ -523,6 +523,7 @@ app.get("/api/vendedores/:id/pendientes", async (req, res) => {
                     producto_id: f.producto_id,
                     codigo: f.codigo,
                     nombre: f.nombre,
+                    categoria: f.categoria,
                     precio: f.precio,
                     pendiente: f.pendiente,
                 });
