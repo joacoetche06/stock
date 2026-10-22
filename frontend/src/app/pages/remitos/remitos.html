@@ -886,22 +886,43 @@
 
     <!-- Paso 3: cargar devoluciones por código -->
     <h3 style="color: #343a40; margin: 10px 0">3. Cargá lo que te devolvió (por código)</h3>
+    <p *ngIf="gruposLiquidacion().length > 0" style="color: #6c757d; margin: 0 0 10px">
+      Elegí la categoría, escribí el número y apretá <b>Enter</b>: suma 1 devuelto y queda listo
+      para el siguiente.
+    </p>
     <p *ngIf="gruposLiquidacion().length === 0" style="color: #6c757d">
       Seleccioná remitos arriba para ver los códigos.
     </p>
 
     <!-- Buscador de devoluciones: solo códigos en calle de los remitos tildados -->
     <div (click)="$event.stopPropagation()" style="position: relative; margin-bottom: 16px">
-      <input
-        type="text"
-        placeholder="🔍 Buscar joya devuelta (código o nombre)..."
-        [ngModel]="busquedaDevolucion()"
-        (ngModelChange)="buscarDevolucion($event)"
-        (focus)="mostrarDropdownDevolucion.set(true)"
-        class="input-form"
-        style="width: 100%; box-sizing: border-box; font-size: 1.05em"
-        autocomplete="off"
-      />
+      <div style="display: flex; gap: 10px; width: 100%">
+        <select
+          id="categoria-devolucion"
+          class="input-form custom-select"
+          style="width: 35%; font-size: 1.05em"
+          [ngModel]="categoriaDevolucion()"
+          (ngModelChange)="categoriaDevolucion.set($event)"
+          [disabled]="gruposLiquidacion().length === 0"
+        >
+          <option value="">Todas las categorías</option>
+          <option *ngFor="let cat of categoriasLiquidacion()" [value]="cat">
+            {{ cat | titlecase }}
+          </option>
+        </select>
+        <input
+          id="busqueda-devolucion"
+          type="text"
+          placeholder="🔍 Número + Enter, o buscá por nombre..."
+          [ngModel]="busquedaDevolucion()"
+          (ngModelChange)="buscarDevolucion($event)"
+          (keydown.enter)="devolverPorEnter($event)"
+          (focus)="mostrarDropdownDevolucion.set(true)"
+          class="input-form"
+          style="flex: 1 1 auto; min-width: 0; box-sizing: border-box; font-size: 1.05em"
+          autocomplete="off"
+        />
+      </div>
 
       <div
         *ngIf="mostrarDropdownDevolucion() && gruposFiltradosDevolucion().length > 0"
@@ -969,8 +990,18 @@
       </p>
     </div>
 
+    <p
+      *ngIf="categoriaDevolucion()"
+      style="background: #f1f3f5; border-radius: 6px; padding: 8px 12px; color: #495057"
+    >
+      Mostrando solo <b>{{ categoriaDevolucion() | titlecase }}</b> ({{
+        gruposVisiblesLiquidacion().length
+      }}
+      de {{ gruposLiquidacion().length }} códigos). El total de abajo incluye todo.
+    </p>
+
     <div
-      *ngFor="let g of gruposLiquidacion()"
+      *ngFor="let g of gruposVisiblesLiquidacion()"
       style="border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 14px; overflow: hidden"
     >
       <div
@@ -986,7 +1017,7 @@
       >
         <span
           ><strong>{{ g.codigo }}</strong> — {{ g.nombre }}
-          <span style="opacity: 0.8">(en calle: {{ g.totalPendiente }})</span></span
+          <span style="opacity: 0.8">· {{ g.categoria | titlecase }} · en calle: {{ g.totalPendiente }}</span></span
         >
         <span style="display: flex; align-items: center; gap: 8px">
           Devuelto total:

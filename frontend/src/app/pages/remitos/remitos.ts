@@ -72,6 +72,7 @@ export class RemitosComponent {
   comisionVendedor: number = 25;
   busquedaDevolucion = signal<string>('');
   mostrarDropdownDevolucion = signal<boolean>(false);
+  categoriaDevolucion = signal<string>(''); // '' = todas
 
   // --- Devoluciones parciales (sin liquidar) ---
   devolucionVendedor = signal<{ id: number; nombre: string } | null>(null);
@@ -209,10 +210,24 @@ export class RemitosComponent {
     return filtrarPorRelevancia(filtrados, busqueda, (p) => p.codigo, (p) => [p.nombre, p.categoria, p.material]);
   });
 
-  // Códigos en calle de los remitos seleccionados, filtrados por la búsqueda
+  // Categorías que aparecen en los remitos tildados (para el selector del paso 3)
+  categoriasLiquidacion = computed(() =>
+    [...new Set(this.gruposLiquidacion().map((g) => g.categoria))].sort((a, b) =>
+      a.localeCompare(b),
+    ),
+  );
+
+  // Códigos de la categoría elegida (las tarjetas del paso 3 muestran solo estos)
+  gruposVisiblesLiquidacion = computed(() => {
+    const cat = this.categoriaDevolucion();
+    const grupos = this.gruposLiquidacion();
+    return cat ? grupos.filter((g) => g.categoria === cat) : grupos;
+  });
+
+  // Códigos en calle de los remitos seleccionados (de la categoría elegida), filtrados por la búsqueda
   // (primero los que coinciden por código: "AR" muestra los AR antes que un AN "ÁRBOL...")
   gruposFiltradosDevolucion = computed(() =>
-    filtrarPorRelevancia(this.gruposLiquidacion(), this.busquedaDevolucion(), (g) => g.codigo, (g) => [g.nombre]),
+    filtrarPorRelevancia(this.gruposVisiblesLiquidacion(), this.busquedaDevolucion(), (g) => g.codigo, (g) => [g.nombre]),
   );
 
   // Códigos que la vendedora tiene en calle (todos sus remitos pendientes), filtrados
@@ -727,6 +742,8 @@ export class RemitosComponent {
     this.comisionVendedor = this.configService.comisionDefault;
     this.remitosSeleccionados.set([]);
     this.gruposLiquidacion.set([]);
+    this.categoriaDevolucion.set('');
+    this.busquedaDevolucion.set('');
     this.totalNetoVendedor.set(0);
     this.liquidacionVendedor.set({ id: vend.id!, nombre: vend.nombre });
     this.remitoService.getPendientesVendedor(vend.id!).subscribe({
@@ -938,6 +955,8 @@ export class RemitosComponent {
     this.remitosPendientesVendedor.set([]);
     this.remitosSeleccionados.set([]);
     this.gruposLiquidacion.set([]);
+    this.categoriaDevolucion.set('');
+    this.busquedaDevolucion.set('');
   }
 
   estaRemitoSeleccionado(id: number): boolean {
@@ -977,6 +996,7 @@ export class RemitosComponent {
           mapa[it.codigo] = {
             codigo: it.codigo,
             nombre: it.nombre,
+            categoria: it.categoria || 'Sin Categoría',
             totalPendiente: 0,
             totalDevuelto: 0,
             slots: [],
@@ -998,6 +1018,9 @@ export class RemitosComponent {
       a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }),
     );
     this.gruposLiquidacion.set(grupos);
+    // Si destildó los remitos que tenían la categoría elegida, volvemos a "todas"
+    const cat = this.categoriaDevolucion();
+    if (cat && !grupos.some((g: any) => g.categoria === cat)) this.categoriaDevolucion.set('');
     this.calcularTotalNetoVendedor();
   }
 
@@ -1049,6 +1072,51 @@ export class RemitosComponent {
       showConfirmButton: false,
       timer: 1200,
     });
+  }
+
+  // Paso 3 con teclado: elegís la categoría, escribís el número y Enter = devuelve 1.
+  // "AN0148", "an148" y "148" (con Anillos elegido) son el mismo código.
+  devolverPorEnter(event: Event) {
+    event.preventDefault();
+    const termino = this.busquedaDevolucion().trim();
+    if (!termino) return;
+
+    const categoria = this.categoriaDevolucion();
+    const aviso = (title: string) =>
+      Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title, showConfirmButton: false, timer: 2500 });
+
+    const candidatos = this.gruposVisiblesLiquidacion().filter((g) =>
+      this.coincideCodigo(g.codigo || '', termino),
+    );
+    if (candidatos.length === 0) {
+      aviso(`${termino} no está en calle${categoria ? ' en ' + categoria : ''} (remitos tildados)`);
+      return;
+    }
+    if (candidatos.length > 1) {
+      const codigos = candidatos.map((g) => g.codigo).join(', ');
+      aviso(`Hay varios (${codigos}). Elegí la categoría o escribí el código completo.`);
+      return;
+    }
+
+    const grupo = candidatos[0];
+    const yaDevuelto = grupo.totalDevuelto || 0;
+    if (yaDevuelto + 1 > grupo.totalPendiente) {
+      aviso(`De ${grupo.codigo} ya cargaste los ${grupo.totalPendiente} que tenía en calle`);
+      return;
+    }
+
+    this.distribuirTotal(grupo, yaDevuelto + 1);
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Devuelve ${grupo.codigo} (${yaDevuelto + 1} de ${grupo.totalPendiente})`,
+      showConfirmButton: false,
+      timer: 1200,
+    });
+    // Queda listo para el próximo número
+    this.busquedaDevolucion.set('');
+    this.mostrarDropdownDevolucion.set(false);
   }
 
   // Edición manual de un remito puntual dentro del código
